@@ -6,3 +6,4 @@ A fintech-grade loan management backend using Java 17 + Spring Boot + MySQL + Re
 ```bash
 mvn clean package
 
+Next task: create custom response and error handling 
