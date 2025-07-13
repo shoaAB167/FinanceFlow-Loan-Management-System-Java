@@ -1,51 +1,41 @@
 package com.finance.loanms.controller;
 
-import com.finance.loanms.model.entity.Role;
-import com.finance.loanms.model.entity.User;
-import com.finance.loanms.repository.UserRepository;
-import com.finance.loanms.security.JwtTokenProvider;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import com.finance.loanms.dto.ApiResponse;
+import com.finance.loanms.service.UserService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
-import java.util.Set;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
-    private final JwtTokenProvider jwtTokenProvider;
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final UserService userService;
 
-    public AuthController(JwtTokenProvider jwtTokenProvider, UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this.jwtTokenProvider = jwtTokenProvider;
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
+    public AuthController(UserService userService) {
+        this.userService = userService;
     }
 
     @PostMapping("/register")
-    public String register(@RequestBody Map<String, String> req) {
-        User user = new User();
-        user.setUsername(req.get("username"));
-        user.setPassword(passwordEncoder.encode(req.get("password")));
-        user.setRoles(Set.of(Role.USER));
-        userRepository.save(user);
-        return "User registered!";
+    public ResponseEntity<ApiResponse<String>> register(@RequestBody Map<String, String> req) {
+        return ResponseEntity.ok(userService.register(req.get("username"), req.get("password")));
     }
 
     @PostMapping("/login")
-    public Map<String, String> login(@RequestBody Map<String, String> req) {
-        var user = userRepository.findByUsername(req.get("username"))
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    public ResponseEntity<ApiResponse<Map<String, String>>> login(@RequestBody Map<String, String> req) {
+        return ResponseEntity.ok(userService.login(req.get("username"), req.get("password")));
+    }
 
-        if (!passwordEncoder.matches(req.get("password"), user.getPassword()))
-            throw new RuntimeException("Invalid password");
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<Map<String, String>>> refresh(@RequestBody Map<String, String> req) {
+        return ResponseEntity.ok(userService.refresh(req.get("refreshToken")));
+    }
 
-        return Map.of(
-                "accessToken", jwtTokenProvider.generateAccessToken(user.getUsername(), user.getRoles()),
-                "refreshToken", jwtTokenProvider.generateRefreshToken(user.getUsername())
-        );
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<String>> logout() {
+        return ResponseEntity.ok(ApiResponse.ok("Logout success", null));
     }
 }
+
 
