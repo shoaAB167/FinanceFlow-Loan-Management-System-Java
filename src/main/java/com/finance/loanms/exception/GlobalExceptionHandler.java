@@ -4,7 +4,7 @@ import com.finance.loanms.dto.ApiResponse;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 
-@ControllerAdvice
+@RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(UserNotFoundException.class)
