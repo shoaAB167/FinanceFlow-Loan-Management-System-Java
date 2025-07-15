@@ -1,6 +1,6 @@
 package com.finance.loanms.security;
 
-import com.finance.loanms.model.entity.Role;
+import com.finance.loanms.model.enumtype.Role;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;

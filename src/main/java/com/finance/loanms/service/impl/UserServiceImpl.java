@@ -2,7 +2,7 @@ package com.finance.loanms.service.impl;
 
 import com.finance.loanms.dto.ApiResponse;
 import com.finance.loanms.exception.UserNotFoundException;
-import com.finance.loanms.model.entity.Role;
+import com.finance.loanms.model.enumtype.Role;
 import com.finance.loanms.model.entity.User;
 import com.finance.loanms.repository.UserRepository;
 import com.finance.loanms.security.JwtTokenProvider;
