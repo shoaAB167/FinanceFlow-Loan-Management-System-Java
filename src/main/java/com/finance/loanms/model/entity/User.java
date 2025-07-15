@@ -1,5 +1,6 @@
 package com.finance.loanms.model.entity;
 
+import com.finance.loanms.model.enumtype.Role;
 import jakarta.persistence.*;
 import lombok.*;
 import java.util.Set;

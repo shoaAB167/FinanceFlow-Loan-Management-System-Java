@@ -39,3 +39,14 @@ Errors return structured messages:
   "message": "Invalid password",
   "data": null
 }
+
+### Table relationship diagram
+               
+|  Customer  | 1 ---- * | LoanAccount | 1 ---- * | Installment | 1 ---- 1 | Repayment |
+                            |
+                            *  
+                            |
+                       |  Charge   |
+
+InterestRate is embedded inside LoanAccount with steppedRates stored in a separate collection table.
+
