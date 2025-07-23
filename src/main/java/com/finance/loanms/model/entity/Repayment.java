@@ -20,6 +20,12 @@ public class Repayment extends Auditable {
     private double amount;
     private LocalDate paymentDate;
     private String mode; // UPI, ONLINE, CASH
+    
+    @Column(unique = true)
+    private String transactionId;
+    
+    @ManyToOne(optional = false)
+    private LoanAccount loanAccount;
 
     @OneToOne
     private Installment installment;

@@ -40,6 +40,9 @@ public class LoanAccount extends Auditable {
 
     @OneToMany(mappedBy = "loanAccount", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Charge> charges = new ArrayList<>();
+    
+    @OneToMany(mappedBy = "loanAccount", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Repayment> repayments = new ArrayList<>();
 
     @Column(nullable = false)
     private LocalDate startDate;
