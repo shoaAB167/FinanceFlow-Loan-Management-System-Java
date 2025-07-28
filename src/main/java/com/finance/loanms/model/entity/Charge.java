@@ -23,6 +23,7 @@ public class Charge extends Auditable {
 
     private double amount;
     private LocalDate appliedDate;
+    private String description;
 
     @ManyToOne(optional = false)
     private LoanAccount loanAccount;

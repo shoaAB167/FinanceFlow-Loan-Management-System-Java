@@ -20,18 +20,16 @@ public class ScheduleController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<String>> getSchedule(@PathVariable Long loanId) {
-        // TODO: Implement proper schedule fetching when ScheduleResponse is available
-        return ResponseEntity.ok(ApiResponse.ok("Schedule fetched successfully", "Schedule feature not implemented yet"));
+    public ResponseEntity<ApiResponse<ScheduleResponse>> getSchedule(@PathVariable Long loanId) {
+        return ResponseEntity.ok(scheduleService.getSchedule(loanId));
     }
 
     @PutMapping("/rate-change")
-    public ResponseEntity<ApiResponse<String>> updateScheduleAfterRateChange(
+    public ResponseEntity<ApiResponse<ScheduleResponse>> updateScheduleAfterRateChange(
             @PathVariable Long loanId,
             @RequestParam Double newInterestRate,
             @RequestParam @Min(1) Integer effectiveFromInstallment) {
 
-        // TODO: Implement proper schedule update when ScheduleResponse is available
-        return ResponseEntity.ok(ApiResponse.ok("Schedule updated successfully", "Schedule update feature not implemented yet"));
+        return ResponseEntity.ok(scheduleService.updateScheduleAfterRateChange(loanId, newInterestRate, effectiveFromInstallment));
     }
 }
