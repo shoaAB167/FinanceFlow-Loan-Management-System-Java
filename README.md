@@ -1,9 +1,3 @@
-# Finance Flow Loan Management System
-
-A fintech-grade loan management backend using Java 17 + Spring Boot + MySQL + Redis.
-
-## Build
-```bash
 mvn clean package
 
 ## 🔐 Authentication API (JWT-Based)
@@ -49,4 +43,3 @@ Errors return structured messages:
                        |  Charge   |
 
 InterestRate is embedded inside LoanAccount with steppedRates stored in a separate collection table.
-

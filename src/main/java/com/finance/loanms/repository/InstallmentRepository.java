@@ -9,7 +9,11 @@ import java.util.List;
 public interface InstallmentRepository extends JpaRepository<Installment, Long> {
 
     List<Installment> findByLoanAccountOrderByInstallmentNumberAsc(LoanAccount loanAccount);
+    
+    List<Installment> findByLoanAccountOrderByInstallmentNumber(LoanAccount loanAccount);
 
     List<Installment> findByLoanAccountAndInstallmentNumberGreaterThanEqualOrderByInstallmentNumberAsc(LoanAccount loanAccount, int installmentNumber);
+    
+    List<Installment> findByLoanAccountAndInstallmentNumberGreaterThanEqual(LoanAccount loanAccount, int installmentNumber);
 }
 
