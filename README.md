@@ -2,7 +2,7 @@
 
 ## 📋 Overview
 
-**Note**: This is a development project demonstrating Spring Boot capabilities for loan management systems. For production use, ensure proper security hardening, comprehensive testing, and performance optimization.
+This is a development project demonstrating Spring Boot capabilities for loan management systems. For production use, ensure proper security hardening, comprehensive testing, and performance optimization.
 functionalities for managing loan accounts, repayments, schedules, and customer data. The system supports various loan types with different interest calculation methods and provides a robust API for loan lifecycle management.
 
 ## 🏗️ Application Architecture  Flow
@@ -220,8 +220,7 @@ Content-Type: application/json
 
 {
   "name": "John Smith",
-  "email": "john@example.com",
-  "customerId": "CUST001"
+  "email": "john@example.com"
 }
 ```
 
@@ -285,6 +284,19 @@ Content-Type: application/json
   "interestType": "FIXED",
   "tenureMonths": 24
 }
+
+{
+  "customerId": 1,
+  "principal": 200000,
+  "tenureMonths": 12,
+  "interestType": "STEP",
+  "interestRate": 0.0,
+  "steppedRates": {
+    "1": 8.0,
+    "7": 10.0
+  }
+}
+
 ```
 
 **Response:**

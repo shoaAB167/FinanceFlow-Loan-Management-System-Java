@@ -14,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,7 +59,6 @@ public class CustomerServiceImpl implements CustomerService {
     public ApiResponse<CustomerResponse> getCustomerById(Long customerId) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + customerId));
-
         CustomerResponse response = mapToResponse(customer);
         return ApiResponse.ok("Customer retrieved successfully", response);
     }
@@ -67,7 +67,6 @@ public class CustomerServiceImpl implements CustomerService {
     public ApiResponse<CustomerResponse> getCustomerByCustomerId(String customerId) {
         Customer customer = customerRepository.findByCustomerId(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with Customer ID: " + customerId));
-
         CustomerResponse response = mapToResponse(customer);
         return ApiResponse.ok("Customer retrieved successfully", response);
     }
@@ -82,7 +81,6 @@ public class CustomerServiceImpl implements CustomerService {
             customer.setName(request.getName());
             customer.setEmail(request.getEmail());
             // Note: customerId is typically not updatable for consistency
-
             Customer updatedCustomer = customerRepository.save(customer);
             CustomerResponse response = mapToResponse(updatedCustomer);
 
@@ -123,7 +121,8 @@ public class CustomerServiceImpl implements CustomerService {
                 .email(customer.getEmail())
                 .createdAt(customer.getCreatedAt())
                 .updatedAt(customer.getUpdatedAt())
-                .loans(customer.getLoanAccounts().stream()
+                .loans(customer.getLoanAccounts() != null
+                        ? customer.getLoanAccounts().stream()
                         .map(loan -> CustomerResponse.LoanSummary.builder()
                                 .loanId(loan.getId())
                                 .loanAccountId(loan.getLoanId())
@@ -131,7 +130,8 @@ public class CustomerServiceImpl implements CustomerService {
                                 .status(loan.getStatus().toString())
                                 .tenureMonths(loan.getTenureMonths())
                                 .build())
-                        .collect(Collectors.toList()))
-                .build();
+                        .collect(Collectors.toList())
+                        : List.of()  // or Collections.emptyList()
+                ).build();
     }
 }

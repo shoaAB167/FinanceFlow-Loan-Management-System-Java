@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import jakarta.validation.constraints.NotNull;
 
+import java.util.Map;
+
 @Data
 @Builder
 public class CreateLoanRequest {
@@ -17,8 +19,6 @@ public class CreateLoanRequest {
     @Positive(message = "Principal amount must be positive")
     private Double principal;
 
-    @NotNull(message = "Interest rate is required")
-    @Positive(message = "Interest rate must be positive")
     private Double interestRate;
 
     @NotNull(message = "Interest type is required")
@@ -27,4 +27,6 @@ public class CreateLoanRequest {
     @NotNull(message = "Tenure is required")
     @Positive(message = "Tenure must be a positive integer")
     private Integer tenureMonths;
+
+    private Map<Integer, Double> steppedRates;
 }

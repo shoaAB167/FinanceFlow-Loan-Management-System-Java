@@ -14,5 +14,4 @@ public class CustomerRequest {
     @Email(message = "Email should be valid")
     private String email;
 
-    // Customer ID will be auto-generated, so not needed in request
 }

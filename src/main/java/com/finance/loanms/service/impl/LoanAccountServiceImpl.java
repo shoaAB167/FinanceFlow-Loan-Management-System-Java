@@ -4,9 +4,11 @@ import com.finance.loanms.dto.ApiResponse;
 import com.finance.loanms.dto.request.CreateLoanRequest;
 import com.finance.loanms.dto.request.ForecloseLoanRequest;
 import com.finance.loanms.dto.response.LoanResponse;
+import com.finance.loanms.exception.ResourceNotFoundException;
 import com.finance.loanms.model.entity.Customer;
 import com.finance.loanms.model.entity.InterestRate;
 import com.finance.loanms.model.entity.LoanAccount;
+import com.finance.loanms.model.enumtype.InterestType;
 import com.finance.loanms.model.enumtype.LoanStatus;
 import com.finance.loanms.repository.CustomerRepository;
 import com.finance.loanms.repository.LoanAccountRepository;
@@ -16,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -39,18 +43,29 @@ public class LoanAccountServiceImpl implements LoanAccountService {
         try {
             // 1. Validate customer
             Customer customer = customerRepository.findById(request.getCustomerId())
-                    .orElse(null);
-            if (customer == null) {
-                return ApiResponse.fail("Customer not found");
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + request.getCustomerId()));
+
+            if (request.getInterestType() != InterestType.STEP && request.getInterestRate() == null) {
+                throw new IllegalArgumentException("Interest rate is required for FIXED and FLOATING types");
             }
 
-            // 2. Create InterestRate based on request
+            // 2. Prepare InterestRate object based on type
             InterestRate interestRate = InterestRate.builder()
                     .type(request.getInterestType())
-                    .baseRate(request.getInterestRate())
+                    .baseRate(request.getInterestRate() != null ? request.getInterestRate() : 0.0)
+                    .steppedRates(request.getSteppedRates() != null ? request.getSteppedRates() : new HashMap<>())
                     .build();
 
-            // 3. Create LoanAccount entity with principal, tenure, rate
+            // STEP: Normalize steppedRates if InterestType is STEP
+            if (request.getInterestType() == InterestType.STEP) {
+                if (request.getSteppedRates() == null || request.getSteppedRates().isEmpty()) {
+                    return ApiResponse.fail("Stepped rates are required for STEP interest type");
+                }
+                Map<Integer, Double> normalizedMap = normalizeSteppedRates(request.getSteppedRates(), request.getTenureMonths());
+                interestRate.setSteppedRates(normalizedMap);
+            }
+
+            // 3. Create and persist LoanAccount
             LoanAccount loanAccount = LoanAccount.builder()
                     .loanId(UUID.randomUUID().toString())
                     .customer(customer)
@@ -63,12 +78,13 @@ public class LoanAccountServiceImpl implements LoanAccountService {
 
             loanAccount = loanAccountRepository.save(loanAccount);
 
-            // 4. Generate Installment Schedule using ScheduleService
+            // 4. Generate schedule
             scheduleService.generateSchedule(loanAccount);
 
-            // 5. Map to LoanResponse DTO and return
+            // 5. Return mapped response
             LoanResponse response = LoanResponse.fromEntity(loanAccount);
             return ApiResponse.ok("Loan created successfully", response);
+
         } catch (Exception e) {
             return ApiResponse.fail("Failed to create loan: " + e.getMessage());
         }
@@ -117,4 +133,23 @@ public class LoanAccountServiceImpl implements LoanAccountService {
             return ApiResponse.fail("Failed to retrieve loan: " + e.getMessage());
         }
     }
+
+    private Map<Integer, Double> normalizeSteppedRates(Map<Integer, Double> inputSteps, int tenureMonths) {
+        Map<Integer, Double> expanded = new HashMap<>();
+        var sortedKeys = inputSteps.keySet().stream().sorted().toList();
+
+        for (int i = 1; i <= tenureMonths; i++) {
+            double currentRate = 0;
+            for (int j = sortedKeys.size() - 1; j >= 0; j--) {
+                if (i >= sortedKeys.get(j)) {
+                    currentRate = inputSteps.get(sortedKeys.get(j));
+                    break;
+                }
+            }
+            expanded.put(i, currentRate);
+        }
+
+        return expanded;
+    }
+
 }
