@@ -6,6 +6,7 @@ import com.finance.loanms.exception.ResourceNotFoundException;
 import com.finance.loanms.model.entity.Installment;
 import com.finance.loanms.model.entity.LoanAccount;
 import com.finance.loanms.model.enumtype.InstallmentStatus;
+import com.finance.loanms.model.enumtype.InterestType;
 import com.finance.loanms.repository.InstallmentRepository;
 import com.finance.loanms.repository.LoanAccountRepository;
 import com.finance.loanms.service.ScheduleService;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,24 +30,33 @@ public class ScheduleServiceImpl implements ScheduleService {
         this.loanAccountRepository = loanAccountRepository;
     }
 
-    @Transactional
-    @Override
     public void generateSchedule(LoanAccount loanAccount) {
         List<Installment> installments = new ArrayList<>();
+        double principal = loanAccount.getPrincipal();
+        int tenure = loanAccount.getTenureMonths();
+        double principalComponent = principal / tenure;
 
-        double principalComponent = loanAccount.getPrincipal() / loanAccount.getTenureMonths();
-        double monthlyInterestRate = loanAccount.getInterestRate().getBaseRate() / 12 / 100;
+        Map<Integer, Double> steppedRates = loanAccount.getInterestRate().getSteppedRates();
+        InterestType type = loanAccount.getInterestRate().getType();
+        LocalDate startDate = loanAccount.getStartDate();
 
-        LocalDate dueDate = loanAccount.getStartDate();
+        for (int i = 1; i <= tenure; i++) {
+            double annualRate;
 
-        for (int i = 1; i <= loanAccount.getTenureMonths(); i++) {
-            double interestComponent = loanAccount.getPrincipal() * monthlyInterestRate;
+            if (type == InterestType.STEP) {
+                annualRate = steppedRates.get(i);
+            } else {
+                annualRate = loanAccount.getInterestRate().getBaseRate(); // FIXED or FLOATING
+            }
+
+            double monthlyRate = annualRate / 12 / 100;
+            double interestComponent = principal * monthlyRate;
             double totalAmount = principalComponent + interestComponent;
 
             Installment installment = Installment.builder()
                     .loanAccount(loanAccount)
                     .installmentNumber(i)
-                    .dueDate(dueDate.plusMonths(i))
+                    .dueDate(startDate.plusMonths(i))
                     .principalComponent(principalComponent)
                     .interestComponent(interestComponent)
                     .totalAmount(totalAmount)
@@ -54,7 +65,6 @@ public class ScheduleServiceImpl implements ScheduleService {
 
             installments.add(installment);
         }
-
         installmentRepository.saveAll(installments);
     }
 
