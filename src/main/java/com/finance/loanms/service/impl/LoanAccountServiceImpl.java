@@ -8,12 +8,16 @@ import com.finance.loanms.exception.ResourceNotFoundException;
 import com.finance.loanms.model.entity.Customer;
 import com.finance.loanms.model.entity.InterestRate;
 import com.finance.loanms.model.entity.LoanAccount;
+import com.finance.loanms.model.enumtype.InstallmentStatus;
 import com.finance.loanms.model.enumtype.InterestType;
 import com.finance.loanms.model.enumtype.LoanStatus;
+import com.finance.loanms.repository.ChargeRepository;
 import com.finance.loanms.repository.CustomerRepository;
+import com.finance.loanms.repository.InstallmentRepository;
 import com.finance.loanms.repository.LoanAccountRepository;
 import com.finance.loanms.service.LoanAccountService;
 import com.finance.loanms.service.ScheduleService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,13 +32,17 @@ public class LoanAccountServiceImpl implements LoanAccountService {
     private final CustomerRepository customerRepository;
     private final LoanAccountRepository loanAccountRepository;
     private final ScheduleService scheduleService;
+    private final InstallmentRepository installmentRepository;
+    private final ChargeRepository chargeRepository;
 
     public LoanAccountServiceImpl(CustomerRepository customerRepository,
                                   LoanAccountRepository loanAccountRepository,
-                                  ScheduleService scheduleService) {
+                                  ScheduleService scheduleService, InstallmentRepository installmentRepository, ChargeRepository chargeRepository) {
         this.customerRepository = customerRepository;
         this.loanAccountRepository = loanAccountRepository;
         this.scheduleService = scheduleService;
+        this.installmentRepository = installmentRepository;
+        this.chargeRepository = chargeRepository;
     }
 
     @Transactional
@@ -90,6 +98,42 @@ public class LoanAccountServiceImpl implements LoanAccountService {
         }
     }
 
+//    @Transactional
+//    @Override
+//    public ApiResponse<LoanResponse> forecloseLoan(Long loanId, ForecloseLoanRequest request) {
+//        try {
+//            // 1. Find active loan
+//            LoanAccount loanAccount = loanAccountRepository.findByIdAndStatus(loanId, LoanStatus.ACTIVE)
+//                    .orElse(null);
+//            if (loanAccount == null) {
+//                return ApiResponse.fail("Active loan not found");
+//            }
+//
+//            // 2. Check if all installments are paid
+//            boolean hasUnpaidInstallments = installmentRepository
+//                    .existsByLoanAccountIdAndStatus(loanId, InstallmentStatus.DUE);
+//
+//            if (hasUnpaidInstallments) {
+//                return ApiResponse.fail("Loan cannot be foreclosed. There are unpaid installments.");
+//            }
+//
+//            // 2. Validate foreclosure eligibility (all dues cleared, etc.)
+//            // TODO: Implement foreclosure eligibility check in separate method
+//
+//            // 3. Apply foreclosure charges
+//            // TODO: Use ChargeService to apply foreclosure charge
+//
+//            // 4. Mark loan as FORECLOSED and save
+//            loanAccount.setStatus(LoanStatus.FORECLOSED);
+//            loanAccount = loanAccountRepository.save(loanAccount);
+//
+//            LoanResponse response = LoanResponse.fromEntity(loanAccount);
+//            return ApiResponse.ok("Loan foreclosed successfully", response);
+//        } catch (Exception e) {
+//            return ApiResponse.fail("Failed to foreclose loan: " + e.getMessage());
+//        }
+//    }
+
     @Transactional
     @Override
     public ApiResponse<LoanResponse> forecloseLoan(Long loanId, ForecloseLoanRequest request) {
@@ -101,11 +145,17 @@ public class LoanAccountServiceImpl implements LoanAccountService {
                 return ApiResponse.fail("Active loan not found");
             }
 
-            // 2. Validate foreclosure eligibility (all dues cleared, etc.)
-            // TODO: Implement foreclosure eligibility check in separate method
+            // 2. Check if any unpaid installments exist
+            boolean hasDueInstallments = installmentRepository.existsByLoanAccountIdAndStatus(loanId, InstallmentStatus.DUE);
+            if (hasDueInstallments) {
+                return ApiResponse.fail("Loan cannot be foreclosed — unpaid installments exist.");
+            }
 
-            // 3. Apply foreclosure charges
-            // TODO: Use ChargeService to apply foreclosure charge
+            // 3. Check if any charges exist
+            boolean hasCharges = chargeRepository.existsById(loanId);
+            if (hasCharges) {
+                return ApiResponse.fail("Loan cannot be foreclosed — outstanding charges exist.");
+            }
 
             // 4. Mark loan as FORECLOSED and save
             loanAccount.setStatus(LoanStatus.FORECLOSED);
@@ -113,6 +163,7 @@ public class LoanAccountServiceImpl implements LoanAccountService {
 
             LoanResponse response = LoanResponse.fromEntity(loanAccount);
             return ApiResponse.ok("Loan foreclosed successfully", response);
+
         } catch (Exception e) {
             return ApiResponse.fail("Failed to foreclose loan: " + e.getMessage());
         }

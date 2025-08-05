@@ -1,6 +1,8 @@
 package com.finance.loanms.dto.request;
 
 import com.finance.loanms.model.enumtype.ChargeType;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Builder;
@@ -13,6 +15,7 @@ import java.time.LocalDate;
 public class ChargeRequest {
 
     @NotNull(message = "Charge type is required")
+    @Enumerated(EnumType.STRING)
     private ChargeType type;
 
     @NotNull(message = "Amount is required")
