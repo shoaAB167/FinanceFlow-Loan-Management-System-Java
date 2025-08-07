@@ -27,6 +27,7 @@ public class Repayment extends Auditable {
     @ManyToOne(optional = false)
     private LoanAccount loanAccount;
 
-    @OneToOne
+    @ManyToOne(optional = false)
     private Installment installment;
+
 }

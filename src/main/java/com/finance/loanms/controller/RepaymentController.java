@@ -2,6 +2,7 @@ package com.finance.loanms.controller;
 
 import com.finance.loanms.dto.request.RepaymentRequest;
 import com.finance.loanms.dto.ApiResponse;
+import com.finance.loanms.dto.response.RepaymentHistoryResponse;
 import com.finance.loanms.dto.response.RepaymentResponse;
 import com.finance.loanms.service.RepaymentService;
 import jakarta.validation.Valid;
@@ -27,7 +28,7 @@ public class RepaymentController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<RepaymentResponse>> getRepaymentHistory(@PathVariable Long loanId) {
+    public ResponseEntity<ApiResponse<RepaymentHistoryResponse>> getRepaymentHistory(@PathVariable Long loanId) {
         return ResponseEntity.ok(repaymentService.getRepaymentHistory(loanId));
     }
 }
