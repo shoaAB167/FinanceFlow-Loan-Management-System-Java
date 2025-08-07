@@ -2,8 +2,9 @@ package com.finance.loanms.service.impl;
 
 import com.finance.loanms.dto.ApiResponse;
 import com.finance.loanms.dto.request.RepaymentRequest;
+import com.finance.loanms.dto.response.RepaymentHistory;
+import com.finance.loanms.dto.response.RepaymentHistoryResponse;
 import com.finance.loanms.dto.response.RepaymentResponse;
-import com.finance.loanms.exception.ResourceNotFoundException;
 import com.finance.loanms.model.entity.Installment;
 import com.finance.loanms.model.entity.LoanAccount;
 import com.finance.loanms.model.entity.Repayment;
@@ -15,6 +16,8 @@ import com.finance.loanms.service.RepaymentService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 @Service
@@ -43,53 +46,62 @@ public class RepaymentServiceImpl implements RepaymentService {
                 return ApiResponse.fail("Loan not found");
             }
 
-            // 2. Check for existing transactionId (idempotency)
+            // 2. Check for duplicate transactionId
             if (repaymentRepository.existsByTransactionId(request.transactionId())) {
-                return ApiResponse.fail("Duplicate transaction ignored");
+                return ApiResponse.fail("Duplicate transaction ID");
             }
 
             double amountToApply = request.amountPaid();
 
-            // 3. Apply payment against due installments (FIFO)
-            List<Installment> installments = installmentRepository.findByLoanAccountOrderByInstallmentNumberAsc(loanAccount);
+            // 3. Fetch due installments (FIFO)
+            List<Installment> installments = installmentRepository
+                    .findByLoanAccountOrderByInstallmentNumberAsc(loanAccount);
 
             for (Installment installment : installments) {
                 if (installment.getStatus() == InstallmentStatus.PAID) continue;
 
-                double pendingAmount = installment.getTotalAmount();
-                if (amountToApply >= pendingAmount) {
-                    installment.setStatus(InstallmentStatus.PAID);
-                    amountToApply -= pendingAmount;
-                } else {
-                    // Partial payment handling (optional based on business rule)
-                    // Here we just deduct from pending and maybe keep status DUE
-                    amountToApply = 0;
+                double totalPaid = installment.getRepayments().stream()
+                        .mapToDouble(Repayment::getAmount)
+                        .sum();
+
+                double pendingAmount = installment.getTotalAmount() - totalPaid;
+
+                // Skip if amount is not exactly equal to the pending amount
+                BigDecimal amountToApplyRounded = BigDecimal.valueOf(amountToApply).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal pendingAmountRounded = BigDecimal.valueOf(pendingAmount).setScale(2, RoundingMode.HALF_UP);
+
+                if (amountToApplyRounded.compareTo(pendingAmountRounded) != 0) {
+                    return ApiResponse.fail("Amount does not match the next due EMI: ₹" + pendingAmountRounded);
                 }
+
+                // Create repayment
+                Repayment repayment = Repayment.builder()
+                        .loanAccount(loanAccount)
+                        .installment(installment)
+                        .amount(amountToApply)
+                        .paymentDate(request.paymentDate())
+                        .transactionId(request.transactionId())
+                        .mode(request.mode())
+                        .build();
+
+                repayment = repaymentRepository.save(repayment);
+                installment.getRepayments().add(repayment);
+                installment.setStatus(InstallmentStatus.PAID);
+
                 installmentRepository.save(installment);
 
-                if (amountToApply == 0) break;
+                return ApiResponse.ok("Repayment applied successfully",
+                        new RepaymentResponse("Repayment processed", null));
             }
 
-            // 4. Save Repayment record
-            Repayment repayment = Repayment.builder()
-                    .loanAccount(loanAccount)
-                    .amount(request.amountPaid())
-                    .paymentDate(request.paymentDate())
-                    .mode(request.mode())
-                    .transactionId(request.transactionId())
-                    .build();
-
-            repayment = repaymentRepository.save(repayment);
-
-            RepaymentResponse response = new RepaymentResponse("Repayment applied successfully", repayment.getId());
-            return ApiResponse.ok("Repayment processed successfully", response);
+            return ApiResponse.fail("No due installment found to match the payment amount");
         } catch (Exception e) {
-            return ApiResponse.fail("Failed to process repayment: " + e.getMessage());
+            throw new RuntimeException("Failed to apply repayment: " + e.getMessage(), e);
         }
     }
 
     @Override
-    public ApiResponse<RepaymentResponse> getRepaymentHistory(Long loanId) {
+    public ApiResponse<RepaymentHistoryResponse> getRepaymentHistory(Long loanId) {
         try {
             // 1. Validate LoanAccount
             LoanAccount loanAccount = loanAccountRepository.findById(loanId)
@@ -98,12 +110,30 @@ public class RepaymentServiceImpl implements RepaymentService {
                 return ApiResponse.fail("Loan not found");
             }
 
-            // 2. Fetch repayments and map to response
-            List<Repayment> repayments = repaymentRepository.findByLoanAccountOrderByPaymentDateAsc(loanAccount);
-            
-            // TODO: Create proper RepaymentResponse with repayment history
-            RepaymentResponse response = new RepaymentResponse("Repayment history retrieved", null);
+            // 2. Fetch repayments sorted by payment date
+            List<Repayment> repayments = repaymentRepository
+                    .findByLoanAccountOrderByPaymentDateAsc(loanAccount);
+
+            // 3. Map to DTOs
+            List<RepaymentHistory> repaymentDtos = repayments.stream()
+                    .map(r -> new RepaymentHistory(
+                            r.getId(),
+                            r.getAmount(),
+                            r.getPaymentDate(),
+                            r.getMode(), // assuming enum
+                            r.getTransactionId(),
+                            r.getInstallment().getInstallmentNumber()
+                    ))
+                    .toList();
+
+            // 4. Build response
+            RepaymentHistoryResponse response = new RepaymentHistoryResponse(
+                    "Repayment history retrieved",
+                    repaymentDtos
+            );
+
             return ApiResponse.ok("Repayment history fetched successfully", response);
+
         } catch (Exception e) {
             return ApiResponse.fail("Failed to fetch repayment history: " + e.getMessage());
         }
