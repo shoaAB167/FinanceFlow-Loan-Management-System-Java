@@ -29,76 +29,115 @@ public class ChargeServiceImpl implements ChargeService {
     @Override
     @Transactional
     public ApiResponse<ChargeResponse> addCharge(Long loanId, ChargeRequest request) {
-        LoanAccount loanAccount = loanAccountRepository.findById(loanId)
-                .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
+        try {
+            if (request == null) {
+                throw new IllegalArgumentException("Charge request cannot be null");
+            }
+            if (request.getAmount() <= 0) {
+                throw new IllegalArgumentException("Charge amount must be greater than 0");
+            }
+            if (request.getType() == null) {
+                throw new IllegalArgumentException("Charge type is required");
+            }
 
-        Charge charge = Charge.builder()
-                .type(request.getType())
-                .amount(request.getAmount())
-                .appliedDate(request.getAppliedDate())
-                .description(request.getDescription())
-                .loanAccount(loanAccount)
-                .build();
+            LoanAccount loanAccount = loanAccountRepository.findById(loanId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
 
-        Charge savedCharge = chargeRepository.save(charge);
+            Charge charge = Charge.builder()
+                    .type(request.getType())
+                    .amount(request.getAmount())
+                    .appliedDate(request.getAppliedDate())
+                    .description(request.getDescription())
+                    .loanAccount(loanAccount)
+                    .build();
 
-        ChargeResponse response = ChargeResponse.builder()
-                .chargeId(savedCharge.getId())
-                .type(savedCharge.getType())
-                .amount(savedCharge.getAmount())
-                .appliedDate(savedCharge.getAppliedDate())
-                .description(request.getDescription())
-                .loanAccountId(loanAccount.getId())
-                .build();
+            Charge savedCharge = chargeRepository.save(charge);
 
-        return ApiResponse.ok("Charge added successfully", response);
+            ChargeResponse response = ChargeResponse.builder()
+                    .chargeId(savedCharge.getId())
+                    .type(savedCharge.getType())
+                    .amount(savedCharge.getAmount())
+                    .appliedDate(savedCharge.getAppliedDate())
+                    .description(request.getDescription())
+                    .loanAccountId(loanAccount.getId())
+                    .build();
+
+            return ApiResponse.ok("Charge added successfully", response);
+        } catch (IllegalArgumentException | ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to add charge: " + e.getMessage(), e);
+        }
     }
 
     @Override
     public ApiResponse<ChargeResponse.ChargeListResponse> getChargesByLoan(Long loanId) {
-        LoanAccount loanAccount = loanAccountRepository.findById(loanId)
-                .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
+        try {
+            if (loanId == null || loanId <= 0) {
+                throw new IllegalArgumentException("Invalid loan ID");
+            }
 
-        List<Charge> charges = chargeRepository.findByLoanAccount(loanAccount);
+            LoanAccount loanAccount = loanAccountRepository.findById(loanId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
 
-        List<ChargeResponse.ChargeListResponse.ChargeDetails> chargeDetails = charges.stream()
-                .map(charge -> ChargeResponse.ChargeListResponse.ChargeDetails.builder()
-                        .chargeId(charge.getId())
-                        .type(charge.getType())
-                        .amount(charge.getAmount())
-                        .appliedDate(charge.getAppliedDate())
-                        .description(charge.getDescription() != null ? charge.getDescription() : "")
-                        .build())
-                .collect(Collectors.toList());
+            List<Charge> charges = chargeRepository.findByLoanAccount(loanAccount);
 
-        double totalCharges = charges.stream()
-                .mapToDouble(Charge::getAmount)
-                .sum();
+            List<ChargeResponse.ChargeListResponse.ChargeDetails> chargeDetails = charges.stream()
+                    .map(charge -> ChargeResponse.ChargeListResponse.ChargeDetails.builder()
+                            .chargeId(charge.getId())
+                            .type(charge.getType())
+                            .amount(charge.getAmount())
+                            .appliedDate(charge.getAppliedDate())
+                            .description(charge.getDescription() != null ? charge.getDescription() : "")
+                            .build())
+                    .collect(Collectors.toList());
 
-        ChargeResponse.ChargeListResponse response = ChargeResponse.ChargeListResponse.builder()
-                .loanAccountId(loanId)
-                .charges(chargeDetails)
-                .totalCharges(totalCharges)
-                .build();
+            double totalCharges = charges.stream()
+                    .mapToDouble(Charge::getAmount)
+                    .sum();
 
-        return ApiResponse.ok("Charges retrieved successfully", response);
+            ChargeResponse.ChargeListResponse response = ChargeResponse.ChargeListResponse.builder()
+                    .loanAccountId(loanId)
+                    .charges(chargeDetails)
+                    .totalCharges(totalCharges)
+                    .build();
+
+            return ApiResponse.ok("Charges retrieved successfully", response);
+        } catch (IllegalArgumentException | ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to retrieve charges: " + e.getMessage(), e);
+        }
     }
 
     @Override
     @Transactional
     public ApiResponse<String> removeCharge(Long loanId, Long chargeId) {
-        LoanAccount loanAccount = loanAccountRepository.findById(loanId)
-                .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
+        try {
+            if (loanId == null || loanId <= 0) {
+                throw new IllegalArgumentException("Invalid loan ID");
+            }
+            if (chargeId == null || chargeId <= 0) {
+                throw new IllegalArgumentException("Invalid charge ID");
+            }
 
-        Charge charge = chargeRepository.findById(chargeId)
-                .orElseThrow(() -> new ResourceNotFoundException("Charge not found with ID: " + chargeId));
+            loanAccountRepository.findById(loanId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
 
-        if (!charge.getLoanAccount().getId().equals(loanId)) {
-            throw new ResourceNotFoundException("Charge does not belong to the specified loan");
+            Charge charge = chargeRepository.findById(chargeId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Charge not found with ID: " + chargeId));
+
+            if (!charge.getLoanAccount().getId().equals(loanId)) {
+                throw new IllegalStateException("Charge does not belong to the specified loan");
+            }
+
+            chargeRepository.delete(charge);
+
+            return ApiResponse.ok("Charge removed successfully", "Charge with ID " + chargeId + " has been removed");
+        } catch (IllegalArgumentException | IllegalStateException | ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to remove charge: " + e.getMessage(), e);
         }
-
-        chargeRepository.delete(charge);
-
-        return ApiResponse.ok("Charge removed successfully", "Charge with ID " + chargeId + " has been removed");
     }
 }

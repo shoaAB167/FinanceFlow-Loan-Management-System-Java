@@ -28,51 +28,106 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public ApiResponse<String> register(String username, String password) {
-        if (userRepo.findByUsername(username).isPresent()) {
-            return ApiResponse.fail("Username already exists");
+        try {
+            if (username == null || username.trim().isEmpty()) {
+                throw new IllegalArgumentException("Username is required");
+            }
+            
+            if (password == null || password.trim().isEmpty()) {
+                throw new IllegalArgumentException("Password is required");
+            }
+            
+            // Validate username format (alphanumeric with underscores, 3-20 characters)
+            if (!username.matches("^[a-zA-Z0-9_]{3,20}$")) {
+                throw new IllegalArgumentException("Username must be 3-20 characters long and can only contain letters, numbers, and underscores");
+            }
+            
+            // Validate password strength (at least 8 characters, with at least one letter and one number)
+            if (!password.matches("^(?=.*[A-Za-z])(?=.*\\d)[A-Za-z\\d]{8,}$")) {
+                throw new IllegalArgumentException("Password must be at least 8 characters long and contain at least one letter and one number");
+            }
+            
+            // Check for existing username
+            if (userRepo.findByUsername(username).isPresent()) {
+                throw new IllegalArgumentException("Username already exists");
+            }
+
+            // Create and save new user
+            User user = new User();
+            user.setUsername(username.trim());
+            user.setPassword(passwordEncoder.encode(password));
+            user.setRoles(Set.of(Role.USER));
+            userRepo.save(user);
+
+            return ApiResponse.ok("User registered successfully", null);
+            
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to register user: " + e.getMessage(), e);
         }
-
-        User user = new User();
-        user.setUsername(username);
-        user.setPassword(passwordEncoder.encode(password));
-        user.setRoles(Set.of(Role.USER));
-        userRepo.save(user);
-
-        return ApiResponse.ok("User registered successfully", null);
     }
 
     @Override
     public ApiResponse<Map<String, String>> login(String username, String password) {
-        User user = userRepo.findByUsername(username)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        try {
+            // Validate input parameters
+            if (username == null || username.trim().isEmpty()) {
+                throw new IllegalArgumentException("Username is required");
+            }
+            
+            if (password == null || password.trim().isEmpty()) {
+                throw new IllegalArgumentException("Password is required");
+            }
+            
+            // Trim username for consistency
+            username = username.trim();
+            
+            // Check if user exists
+            User user = userRepo.findByUsername(username)
+                    .orElseThrow(() -> new UserNotFoundException("Invalid username or password"));
 
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new RuntimeException("Invalid password");
+            // Verify password
+            if (!passwordEncoder.matches(password, user.getPassword())) {
+                throw new IllegalArgumentException("Invalid username or password");
+            }
+
+            // Generate tokens
+            Map<String, String> tokens = Map.of(
+                    "accessToken", jwtTokenProvider.generateAccessToken(user.getUsername(), user.getRoles()),
+                    "refreshToken", jwtTokenProvider.generateRefreshToken(user.getUsername())
+            );
+
+            return ApiResponse.ok("Login successful", tokens);
+            
+        } catch (UserNotFoundException | IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to login: " + e.getMessage(), e);
         }
-
-        Map<String, String> tokens = Map.of(
-                "accessToken", jwtTokenProvider.generateAccessToken(user.getUsername(), user.getRoles()),
-                "refreshToken", jwtTokenProvider.generateRefreshToken(user.getUsername())
-        );
-
-        return ApiResponse.ok("Login successful", tokens);
     }
 
     @Override
     public ApiResponse<Map<String, String>> refresh(String refreshToken) {
-        if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new RuntimeException("Invalid or expired refresh token");
+        try {
+            if (!jwtTokenProvider.validateToken(refreshToken)) {
+                throw new IllegalArgumentException("Invalid or expired refresh token");
+            }
+
+            String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
+            User user = userRepo.findByUsername(username)
+                    .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+            Map<String, String> tokens = Map.of(
+                    "accessToken", jwtTokenProvider.generateAccessToken(user.getUsername(), user.getRoles())
+            );
+
+            return ApiResponse.ok("Token refreshed successfully", tokens);
+        } catch (IllegalArgumentException | UserNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to refresh token: " + e.getMessage(), e);
         }
-
-        String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
-        User user = userRepo.findByUsername(username)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
-
-        Map<String, String> tokens = Map.of(
-                "accessToken", jwtTokenProvider.generateAccessToken(user.getUsername(), user.getRoles())
-        );
-
-        return ApiResponse.ok("Token refreshed successfully", tokens);
     }
 }
 

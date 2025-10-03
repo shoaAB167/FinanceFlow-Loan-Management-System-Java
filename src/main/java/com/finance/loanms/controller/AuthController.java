@@ -2,6 +2,7 @@ package com.finance.loanms.controller;
 
 import com.finance.loanms.dto.ApiResponse;
 import com.finance.loanms.service.UserService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,7 +29,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<Map<String, String>>> refresh(@RequestBody Map<String, String> req) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> refresh(@Valid @RequestBody Map<String, String> req) {
         return ResponseEntity.ok(userService.refresh(req.get("refreshToken")));
     }
 
