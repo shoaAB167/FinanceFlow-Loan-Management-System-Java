@@ -5,6 +5,7 @@ import com.finance.loanms.dto.request.RepaymentRequest;
 import com.finance.loanms.dto.response.RepaymentHistory;
 import com.finance.loanms.dto.response.RepaymentHistoryResponse;
 import com.finance.loanms.dto.response.RepaymentResponse;
+import com.finance.loanms.exception.ResourceNotFoundException;
 import com.finance.loanms.model.entity.Installment;
 import com.finance.loanms.model.entity.LoanAccount;
 import com.finance.loanms.model.entity.Repayment;
@@ -39,21 +40,24 @@ public class RepaymentServiceImpl implements RepaymentService {
     @Override
     public ApiResponse<RepaymentResponse> applyRepayment(Long loanId, RepaymentRequest request) {
         try {
-            // 1. Validate LoanAccount
-            LoanAccount loanAccount = loanAccountRepository.findById(loanId)
-                    .orElse(null);
-            if (loanAccount == null) {
-                return ApiResponse.fail("Loan not found");
+            if (request == null) {
+                throw new IllegalArgumentException("Repayment request cannot be null");
+            }
+            if (request.amountPaid() <= 0) {
+                throw new IllegalArgumentException("Payment amount must be greater than 0");
+            }
+            if (request.transactionId() == null || request.transactionId().trim().isEmpty()) {
+                throw new IllegalArgumentException("Transaction ID is required");
             }
 
-            // 2. Check for duplicate transactionId
+            LoanAccount loanAccount = loanAccountRepository.findById(loanId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
+
             if (repaymentRepository.existsByTransactionId(request.transactionId())) {
-                return ApiResponse.fail("Duplicate transaction ID");
+                throw new IllegalStateException("Duplicate transaction ID: " + request.transactionId());
             }
 
             double amountToApply = request.amountPaid();
-
-            // 3. Fetch due installments (FIFO)
             List<Installment> installments = installmentRepository
                     .findByLoanAccountOrderByInstallmentNumberAsc(loanAccount);
 
@@ -66,15 +70,13 @@ public class RepaymentServiceImpl implements RepaymentService {
 
                 double pendingAmount = installment.getTotalAmount() - totalPaid;
 
-                // Skip if amount is not exactly equal to the pending amount
                 BigDecimal amountToApplyRounded = BigDecimal.valueOf(amountToApply).setScale(2, RoundingMode.HALF_UP);
                 BigDecimal pendingAmountRounded = BigDecimal.valueOf(pendingAmount).setScale(2, RoundingMode.HALF_UP);
 
                 if (amountToApplyRounded.compareTo(pendingAmountRounded) != 0) {
-                    return ApiResponse.fail("Amount does not match the next due EMI: ₹" + pendingAmountRounded);
+                    throw new IllegalArgumentException("Amount does not match the next due EMI: ₹" + pendingAmountRounded);
                 }
 
-                // Create repayment
                 Repayment repayment = Repayment.builder()
                         .loanAccount(loanAccount)
                         .installment(installment)
@@ -87,14 +89,15 @@ public class RepaymentServiceImpl implements RepaymentService {
                 repayment = repaymentRepository.save(repayment);
                 installment.getRepayments().add(repayment);
                 installment.setStatus(InstallmentStatus.PAID);
-
                 installmentRepository.save(installment);
 
                 return ApiResponse.ok("Repayment applied successfully",
                         new RepaymentResponse("Repayment processed", null));
             }
 
-            return ApiResponse.fail("No due installment found to match the payment amount");
+            throw new IllegalStateException("No due installment found to match the payment amount");
+        } catch (IllegalArgumentException | IllegalStateException | ResourceNotFoundException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("Failed to apply repayment: " + e.getMessage(), e);
         }
@@ -103,30 +106,27 @@ public class RepaymentServiceImpl implements RepaymentService {
     @Override
     public ApiResponse<RepaymentHistoryResponse> getRepaymentHistory(Long loanId) {
         try {
-            // 1. Validate LoanAccount
-            LoanAccount loanAccount = loanAccountRepository.findById(loanId)
-                    .orElse(null);
-            if (loanAccount == null) {
-                return ApiResponse.fail("Loan not found");
+            if (loanId == null || loanId <= 0) {
+                throw new IllegalArgumentException("Invalid loan ID");
             }
 
-            // 2. Fetch repayments sorted by payment date
+            LoanAccount loanAccount = loanAccountRepository.findById(loanId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
+
             List<Repayment> repayments = repaymentRepository
                     .findByLoanAccountOrderByPaymentDateAsc(loanAccount);
 
-            // 3. Map to DTOs
             List<RepaymentHistory> repaymentDtos = repayments.stream()
                     .map(r -> new RepaymentHistory(
                             r.getId(),
                             r.getAmount(),
                             r.getPaymentDate(),
-                            r.getMode(), // assuming enum
+                            r.getMode(),
                             r.getTransactionId(),
                             r.getInstallment().getInstallmentNumber()
                     ))
                     .toList();
 
-            // 4. Build response
             RepaymentHistoryResponse response = new RepaymentHistoryResponse(
                     "Repayment history retrieved",
                     repaymentDtos
@@ -134,8 +134,10 @@ public class RepaymentServiceImpl implements RepaymentService {
 
             return ApiResponse.ok("Repayment history fetched successfully", response);
 
+        } catch (IllegalArgumentException | ResourceNotFoundException e) {
+            throw e;
         } catch (Exception e) {
-            return ApiResponse.fail("Failed to fetch repayment history: " + e.getMessage());
+            throw new RuntimeException("Failed to fetch repayment history: " + e.getMessage(), e);
         }
     }
 }

@@ -31,100 +31,132 @@ public class ScheduleServiceImpl implements ScheduleService {
     }
 
     public void generateSchedule(LoanAccount loanAccount) {
-        List<Installment> installments = new ArrayList<>();
-        double principal = loanAccount.getPrincipal();
-        int tenure = loanAccount.getTenureMonths();
-        double principalComponent = principal / tenure;
-
-        Map<Integer, Double> steppedRates = loanAccount.getInterestRate().getSteppedRates();
-        InterestType type = loanAccount.getInterestRate().getType();
-        LocalDate startDate = loanAccount.getStartDate();
-
-        for (int i = 1; i <= tenure; i++) {
-            double annualRate;
-
-            if (type == InterestType.STEP) {
-                annualRate = steppedRates.get(i);
-            } else {
-                annualRate = loanAccount.getInterestRate().getBaseRate(); // FIXED or FLOATING
+        try {
+            if (loanAccount == null) {
+                throw new IllegalArgumentException("Loan account cannot be null");
+            }
+            if (loanAccount.getPrincipal() <= 0) {
+                throw new IllegalArgumentException("Principal amount must be greater than 0");
+            }
+            if (loanAccount.getTenureMonths() <= 0) {
+                throw new IllegalArgumentException("Tenure must be greater than 0");
             }
 
-            double monthlyRate = annualRate / 12 / 100;
-            double interestComponent = principal * monthlyRate;
-            double totalAmount = principalComponent + interestComponent;
+            List<Installment> installments = new ArrayList<>();
+            double principal = loanAccount.getPrincipal();
+            int tenure = loanAccount.getTenureMonths();
+            double principalComponent = principal / tenure;
 
-            Installment installment = Installment.builder()
-                    .loanAccount(loanAccount)
-                    .installmentNumber(i)
-                    .dueDate(startDate.plusMonths(i))
-                    .principalComponent(principalComponent)
-                    .interestComponent(interestComponent)
-                    .totalAmount(totalAmount)
-                    .status(InstallmentStatus.DUE)
-                    .build();
+            Map<Integer, Double> steppedRates = loanAccount.getInterestRate().getSteppedRates();
+            InterestType type = loanAccount.getInterestRate().getType();
+            LocalDate startDate = loanAccount.getStartDate();
 
-            installments.add(installment);
+            if (type == InterestType.STEP && (steppedRates == null || steppedRates.isEmpty())) {
+                throw new IllegalStateException("Stepped rates are required for STEP interest type");
+            }
+
+            for (int i = 1; i <= tenure; i++) {
+                double annualRate;
+
+                if (type == InterestType.STEP) {
+                    annualRate = steppedRates.get(i);
+                } else {
+                    annualRate = loanAccount.getInterestRate().getBaseRate();
+                }
+
+                double monthlyRate = annualRate / 12 / 100;
+                double interestComponent = principal * monthlyRate;
+                double totalAmount = principalComponent + interestComponent;
+
+                Installment installment = Installment.builder()
+                        .loanAccount(loanAccount)
+                        .installmentNumber(i)
+                        .dueDate(startDate.plusMonths(i))
+                        .principalComponent(principalComponent)
+                        .interestComponent(interestComponent)
+                        .totalAmount(totalAmount)
+                        .status(InstallmentStatus.DUE)
+                        .build();
+
+                installments.add(installment);
+            }
+            installmentRepository.saveAll(installments);
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate schedule: " + e.getMessage(), e);
         }
-        installmentRepository.saveAll(installments);
     }
 
     @Override
     public ApiResponse<ScheduleResponse> getSchedule(Long loanId) {
-        LoanAccount loanAccount = loanAccountRepository.findById(loanId)
-                .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
+        try {
+            LoanAccount loanAccount = loanAccountRepository.findById(loanId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
 
-        List<Installment> installments = installmentRepository.findByLoanAccountOrderByInstallmentNumber(loanAccount);
+            List<Installment> installments = installmentRepository.findByLoanAccountOrderByInstallmentNumber(loanAccount);
 
-        List<ScheduleResponse.InstallmentEntry> scheduleEntries = installments.stream()
-                .map(installment -> new ScheduleResponse.InstallmentEntry(
-                        installment.getInstallmentNumber(),
-                        installment.getDueDate(),
-                        installment.getPrincipalComponent(),
-                        installment.getInterestComponent(),
-                        installment.getTotalAmount(),
-                        installment.getStatus().toString()
-                ))
-                .collect(Collectors.toList());
+            List<ScheduleResponse.InstallmentEntry> scheduleEntries = installments.stream()
+                    .map(installment -> new ScheduleResponse.InstallmentEntry(
+                            installment.getInstallmentNumber(),
+                            installment.getDueDate(),
+                            installment.getPrincipalComponent(),
+                            installment.getInterestComponent(),
+                            installment.getTotalAmount(),
+                            installment.getStatus().toString()
+                    ))
+                    .collect(Collectors.toList());
 
-        ScheduleResponse response = new ScheduleResponse(loanId, scheduleEntries);
-        return ApiResponse.ok("Schedule retrieved successfully", response);
+            ScheduleResponse response = new ScheduleResponse(loanId, scheduleEntries);
+            return ApiResponse.ok("Schedule retrieved successfully", response);
+        } catch (ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to retrieve schedule: " + e.getMessage(), e);
+        }
     }
 
     @Transactional
     @Override
     public ApiResponse<ScheduleResponse> updateScheduleAfterRateChange(Long loanId, double newRate, int effectiveFromInstallment) {
-        LoanAccount loanAccount = loanAccountRepository.findById(loanId)
-                .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
+        try {
+            if (newRate < 0) {
+                throw new IllegalArgumentException("Interest rate cannot be negative");
+            }
+            if (effectiveFromInstallment < 1) {
+                throw new IllegalArgumentException("Effective installment number must be greater than 0");
+            }
 
-        // Fetch installments from the effective installment number onwards
-        List<Installment> installmentsToUpdate = installmentRepository
-                .findByLoanAccountAndInstallmentNumberGreaterThanEqual(loanAccount, effectiveFromInstallment);
+            LoanAccount loanAccount = loanAccountRepository.findById(loanId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
 
-        if (installmentsToUpdate.isEmpty()) {
-            throw new ResourceNotFoundException("No installments found from installment number: " + effectiveFromInstallment);
-        }
+            List<Installment> installmentsToUpdate = installmentRepository
+                    .findByLoanAccountAndInstallmentNumberGreaterThanEqual(loanAccount, effectiveFromInstallment);
 
-        // Calculate new monthly interest rate
-        double newMonthlyInterestRate = newRate / 12 / 100;
-        
-        // Update each installment with new interest rate
-        for (Installment installment : installmentsToUpdate) {
-            double newInterestComponent = loanAccount.getPrincipal() * newMonthlyInterestRate;
-            double newTotalAmount = installment.getPrincipalComponent() + newInterestComponent;
+            if (installmentsToUpdate.isEmpty()) {
+                throw new ResourceNotFoundException("No installments found from installment number: " + effectiveFromInstallment);
+            }
+
+            double newMonthlyInterestRate = newRate / 12 / 100;
             
-            installment.setInterestComponent(newInterestComponent);
-            installment.setTotalAmount(newTotalAmount);
+            for (Installment installment : installmentsToUpdate) {
+                double newInterestComponent = loanAccount.getPrincipal() * newMonthlyInterestRate;
+                double newTotalAmount = installment.getPrincipalComponent() + newInterestComponent;
+                
+                installment.setInterestComponent(newInterestComponent);
+                installment.setTotalAmount(newTotalAmount);
+            }
+
+            installmentRepository.saveAll(installmentsToUpdate);
+            loanAccount.getInterestRate().setBaseRate(newRate);
+            loanAccountRepository.save(loanAccount);
+
+            return getSchedule(loanId);
+        } catch (IllegalArgumentException | ResourceNotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to update schedule: " + e.getMessage(), e);
         }
-
-        // Save updated installments
-        installmentRepository.saveAll(installmentsToUpdate);
-
-        // Update the loan account's interest rate
-        loanAccount.getInterestRate().setBaseRate(newRate);
-        loanAccountRepository.save(loanAccount);
-
-        // Return updated schedule
-        return getSchedule(loanId);
     }
 
     // Helper method for updating schedule after rate change (original signature maintained)

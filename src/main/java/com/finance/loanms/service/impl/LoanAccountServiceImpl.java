@@ -17,7 +17,6 @@ import com.finance.loanms.repository.InstallmentRepository;
 import com.finance.loanms.repository.LoanAccountRepository;
 import com.finance.loanms.service.LoanAccountService;
 import com.finance.loanms.service.ScheduleService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,8 +52,10 @@ public class LoanAccountServiceImpl implements LoanAccountService {
             Customer customer = customerRepository.findById(request.getCustomerId())
                     .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + request.getCustomerId()));
 
-            if (request.getInterestType() != InterestType.STEP && request.getInterestRate() == null) {
-                throw new IllegalArgumentException("Interest rate is required for FIXED and FLOATING types");
+            if ((request.getInterestType() == InterestType.FIXED ||
+                    request.getInterestType() == InterestType.FLOATING)
+                    && request.getInterestRate() == null) {
+                throw new IllegalArgumentException("Interest rate is required for " + request.getInterestType() + " interest type");
             }
 
             // 2. Prepare InterestRate object based on type
@@ -93,68 +94,30 @@ public class LoanAccountServiceImpl implements LoanAccountService {
             LoanResponse response = LoanResponse.fromEntity(loanAccount);
             return ApiResponse.ok("Loan created successfully", response);
 
+        } catch (ResourceNotFoundException re) {
+            throw re;
         } catch (Exception e) {
-            return ApiResponse.fail("Failed to create loan: " + e.getMessage());
+            throw new RuntimeException(e);
         }
     }
 
-//    @Transactional
-//    @Override
-//    public ApiResponse<LoanResponse> forecloseLoan(Long loanId, ForecloseLoanRequest request) {
-//        try {
-//            // 1. Find active loan
-//            LoanAccount loanAccount = loanAccountRepository.findByIdAndStatus(loanId, LoanStatus.ACTIVE)
-//                    .orElse(null);
-//            if (loanAccount == null) {
-//                return ApiResponse.fail("Active loan not found");
-//            }
-//
-//            // 2. Check if all installments are paid
-//            boolean hasUnpaidInstallments = installmentRepository
-//                    .existsByLoanAccountIdAndStatus(loanId, InstallmentStatus.DUE);
-//
-//            if (hasUnpaidInstallments) {
-//                return ApiResponse.fail("Loan cannot be foreclosed. There are unpaid installments.");
-//            }
-//
-//            // 2. Validate foreclosure eligibility (all dues cleared, etc.)
-//            // TODO: Implement foreclosure eligibility check in separate method
-//
-//            // 3. Apply foreclosure charges
-//            // TODO: Use ChargeService to apply foreclosure charge
-//
-//            // 4. Mark loan as FORECLOSED and save
-//            loanAccount.setStatus(LoanStatus.FORECLOSED);
-//            loanAccount = loanAccountRepository.save(loanAccount);
-//
-//            LoanResponse response = LoanResponse.fromEntity(loanAccount);
-//            return ApiResponse.ok("Loan foreclosed successfully", response);
-//        } catch (Exception e) {
-//            return ApiResponse.fail("Failed to foreclose loan: " + e.getMessage());
-//        }
-//    }
-
     @Transactional
-    @Override
     public ApiResponse<LoanResponse> forecloseLoan(Long loanId, ForecloseLoanRequest request) {
         try {
             // 1. Find active loan
             LoanAccount loanAccount = loanAccountRepository.findByIdAndStatus(loanId, LoanStatus.ACTIVE)
-                    .orElse(null);
-            if (loanAccount == null) {
-                return ApiResponse.fail("Active loan not found");
-            }
+                    .orElseThrow(() -> new ResourceNotFoundException("Active loan not found with ID: " + loanId));
 
             // 2. Check if any unpaid installments exist
             boolean hasDueInstallments = installmentRepository.existsByLoanAccountIdAndStatus(loanId, InstallmentStatus.DUE);
             if (hasDueInstallments) {
-                return ApiResponse.fail("Loan cannot be foreclosed — unpaid installments exist.");
+                throw new IllegalStateException("Loan cannot be foreclosed — unpaid installments exist");
             }
 
             // 3. Check if any charges exist
             boolean hasCharges = chargeRepository.existsById(loanId);
             if (hasCharges) {
-                return ApiResponse.fail("Loan cannot be foreclosed — outstanding charges exist.");
+                throw new IllegalStateException("Loan cannot be foreclosed — outstanding charges exist");
             }
 
             // 4. Mark loan as FORECLOSED and save
@@ -164,8 +127,10 @@ public class LoanAccountServiceImpl implements LoanAccountService {
             LoanResponse response = LoanResponse.fromEntity(loanAccount);
             return ApiResponse.ok("Loan foreclosed successfully", response);
 
+        } catch (ResourceNotFoundException | IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
-            return ApiResponse.fail("Failed to foreclose loan: " + e.getMessage());
+            throw new RuntimeException("Failed to foreclose loan: " + e.getMessage(), e);
         }
     }
 
@@ -173,15 +138,14 @@ public class LoanAccountServiceImpl implements LoanAccountService {
     public ApiResponse<LoanResponse> getLoanById(Long loanId) {
         try {
             LoanAccount loanAccount = loanAccountRepository.findById(loanId)
-                    .orElse(null);
-            if (loanAccount == null) {
-                return ApiResponse.fail("Loan not found");
-            }
+                    .orElseThrow(() -> new ResourceNotFoundException("Loan not found with ID: " + loanId));
 
             LoanResponse response = LoanResponse.fromEntity(loanAccount);
             return ApiResponse.ok("Loan details retrieved successfully", response);
+        } catch (ResourceNotFoundException re) {
+            throw re;
         } catch (Exception e) {
-            return ApiResponse.fail("Failed to retrieve loan: " + e.getMessage());
+            throw new RuntimeException("Failed to retrieve loan: " + e.getMessage(), e);
         }
     }
 

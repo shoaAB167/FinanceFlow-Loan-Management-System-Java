@@ -14,14 +14,14 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ex.getMessage()));
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ApiResponse<Object>> handleRuntime(RuntimeException ex) {
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Object>> handleIllegalArgument(IllegalArgumentException ex) {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.fail(ex.getMessage()));
     }
 
-    @ExceptionHandler(Exception.class)
+    @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<Object>> handleException(Exception ex) {
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -29,9 +29,9 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiResponse<Object>> handleResourceNotFound(Exception ex) {
+    public ResponseEntity<ApiResponse<Object>> handleResourceNotFound(ResourceNotFoundException ex) {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.fail("Something went wrong: " + ex.getMessage()));
+                .body(ApiResponse.fail(ex.getMessage()));
     }
 }
