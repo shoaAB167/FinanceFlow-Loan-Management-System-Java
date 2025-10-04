@@ -23,7 +23,7 @@ import static io.restassured.RestAssured.given;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers // enables automatic lifecycle management for containers
-public class AuthControllerIntegrationTest {
+public class AuthenticationFlowIntegrationTest {
 
     @ServiceConnection
     @Container
