@@ -7,8 +7,6 @@ import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/loans/{loanId}/schedule")
 public class ScheduleController {
@@ -30,6 +28,7 @@ public class ScheduleController {
             @RequestParam Double newInterestRate,
             @RequestParam @Min(1) Integer effectiveFromInstallment) {
 
-        return ResponseEntity.ok(scheduleService.updateScheduleAfterRateChange(loanId, newInterestRate, effectiveFromInstallment));
+        return ResponseEntity
+                .ok(scheduleService.updateScheduleAfterRateChange(loanId, newInterestRate, effectiveFromInstallment));
     }
 }

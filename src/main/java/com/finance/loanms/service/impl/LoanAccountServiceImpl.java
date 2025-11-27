@@ -15,6 +15,7 @@ import com.finance.loanms.repository.ChargeRepository;
 import com.finance.loanms.repository.CustomerRepository;
 import com.finance.loanms.repository.InstallmentRepository;
 import com.finance.loanms.repository.LoanAccountRepository;
+import com.finance.loanms.service.CreditRiskService;
 import com.finance.loanms.service.LoanAccountService;
 import com.finance.loanms.service.ScheduleService;
 import org.springframework.stereotype.Service;
@@ -33,15 +34,18 @@ public class LoanAccountServiceImpl implements LoanAccountService {
     private final ScheduleService scheduleService;
     private final InstallmentRepository installmentRepository;
     private final ChargeRepository chargeRepository;
+    private final CreditRiskService creditRiskService;
 
     public LoanAccountServiceImpl(CustomerRepository customerRepository,
-                                  LoanAccountRepository loanAccountRepository,
-                                  ScheduleService scheduleService, InstallmentRepository installmentRepository, ChargeRepository chargeRepository) {
+            LoanAccountRepository loanAccountRepository,
+            ScheduleService scheduleService, InstallmentRepository installmentRepository,
+            ChargeRepository chargeRepository, CreditRiskService creditRiskService) {
         this.customerRepository = customerRepository;
         this.loanAccountRepository = loanAccountRepository;
         this.scheduleService = scheduleService;
         this.installmentRepository = installmentRepository;
         this.chargeRepository = chargeRepository;
+        this.creditRiskService = creditRiskService;
     }
 
     @Transactional
@@ -50,15 +54,23 @@ public class LoanAccountServiceImpl implements LoanAccountService {
         try {
             // 1. Validate customer
             Customer customer = customerRepository.findById(request.getCustomerId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with ID: " + request.getCustomerId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Customer not found with ID: " + request.getCustomerId()));
+
+            // 2. Assess Credit Risk
+            var riskAssessment = creditRiskService.assessRisk(request);
+            if (!riskAssessment.isApproved()) {
+                throw new IllegalStateException("Loan rejected: " + riskAssessment.getReason());
+            }
 
             if ((request.getInterestType() == InterestType.FIXED ||
                     request.getInterestType() == InterestType.FLOATING)
                     && request.getInterestRate() == null) {
-                throw new IllegalArgumentException("Interest rate is required for " + request.getInterestType() + " interest type");
+                throw new IllegalArgumentException(
+                        "Interest rate is required for " + request.getInterestType() + " interest type");
             }
 
-            // 2. Prepare InterestRate object based on type
+            // 3. Prepare InterestRate object based on type
             InterestRate interestRate = InterestRate.builder()
                     .type(request.getInterestType())
                     .baseRate(request.getInterestRate() != null ? request.getInterestRate() : 0.0)
@@ -70,11 +82,12 @@ public class LoanAccountServiceImpl implements LoanAccountService {
                 if (request.getSteppedRates() == null || request.getSteppedRates().isEmpty()) {
                     return ApiResponse.fail("Stepped rates are required for STEP interest type");
                 }
-                Map<Integer, Double> normalizedMap = normalizeSteppedRates(request.getSteppedRates(), request.getTenureMonths());
+                Map<Integer, Double> normalizedMap = normalizeSteppedRates(request.getSteppedRates(),
+                        request.getTenureMonths());
                 interestRate.setSteppedRates(normalizedMap);
             }
 
-            // 3. Create and persist LoanAccount
+            // 4. Create and persist LoanAccount
             LoanAccount loanAccount = LoanAccount.builder()
                     .loanId(UUID.randomUUID().toString())
                     .customer(customer)
@@ -87,10 +100,10 @@ public class LoanAccountServiceImpl implements LoanAccountService {
 
             loanAccount = loanAccountRepository.save(loanAccount);
 
-            // 4. Generate schedule
+            // 5. Generate schedule
             scheduleService.generateSchedule(loanAccount);
 
-            // 5. Return mapped response
+            // 6. Return mapped response
             LoanResponse response = LoanResponse.fromEntity(loanAccount);
             return ApiResponse.ok("Loan created successfully", response);
 
@@ -109,7 +122,8 @@ public class LoanAccountServiceImpl implements LoanAccountService {
                     .orElseThrow(() -> new ResourceNotFoundException("Active loan not found with ID: " + loanId));
 
             // 2. Check if any unpaid installments exist
-            boolean hasDueInstallments = installmentRepository.existsByLoanAccountIdAndStatus(loanId, InstallmentStatus.DUE);
+            boolean hasDueInstallments = installmentRepository.existsByLoanAccountIdAndStatus(loanId,
+                    InstallmentStatus.DUE);
             if (hasDueInstallments) {
                 throw new IllegalStateException("Loan cannot be foreclosed — unpaid installments exist");
             }

@@ -1,0 +1,9 @@
+{
+  "monthlyIncome": 50000,
+  "creditScore": 700,
+  "principal": 200000,
+  "tenureMonths": 24,
+  "existingDebt": 10000,
+  "employmentStatus": "SALARIED",
+  "loanPurpose": "HOME"
+}
