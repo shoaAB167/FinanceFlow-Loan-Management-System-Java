@@ -23,9 +23,18 @@ import static org.hamcrest.Matchers.*;
  * - Uses RestAssured for HTTP calls & assertions
  * - Handles authentication flow automatically
  */
+import com.finance.loanms.model.payload.RiskAssessment;
+import com.finance.loanms.service.CreditRiskService;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @Testcontainers
 public class LoanAccountFlowIntegrationTest {
+
+    @MockBean
+    private CreditRiskService creditRiskService;
 
     @ServiceConnection
     @Container
@@ -46,8 +55,7 @@ public class LoanAccountFlowIntegrationTest {
 
         Map<String, String> registerBody = Map.of(
                 "username", "user1" + System.currentTimeMillis(),
-                "password", "Password123"
-        );
+                "password", "Password123");
 
         given()
                 .contentType(ContentType.JSON)
@@ -71,6 +79,14 @@ public class LoanAccountFlowIntegrationTest {
                 .getMap("data");
 
         authToken = "Bearer " + loginResponse.get("accessToken");
+
+        // Default mock behavior: Approve everything
+        when(creditRiskService.assessRisk(any())).thenReturn(
+                RiskAssessment.builder()
+                        .isApproved(true)
+                        .riskScore(0.9)
+                        .reason("Approved by Mock")
+                        .build());
     }
 
     @Test
@@ -82,7 +98,9 @@ public class LoanAccountFlowIntegrationTest {
                     "principal": 10000,
                     "tenureMonths": 12,
                     "interestType": "FIXED",
-                    "interestRate": 10
+                    "interestRate": 10,
+                    "monthlyIncome": 50000.0,
+                    "creditScore": 750
                 }
                 """, customerId);
 
@@ -103,7 +121,45 @@ public class LoanAccountFlowIntegrationTest {
                 .body("data.customerId", notNullValue())
                 .body("data.status", equalTo("ACTIVE"));
     }
-    
+
+    @Test
+    void createLoanAccount_LowCreditScore_ReturnsError() {
+        // Mock rejection for this test
+        when(creditRiskService.assessRisk(any())).thenReturn(
+                RiskAssessment.builder()
+                        .isApproved(false)
+                        .riskScore(0.1)
+                        .reason("Loan rejected: Credit score is below minimum requirement")
+                        .build());
+
+        Long customerId = createTestCustomer();
+        String requestBody = String.format("""
+                {
+                    "customerId": %d,
+                    "principal": 10000,
+                    "tenureMonths": 12,
+                    "interestType": "FIXED",
+                    "interestRate": 10,
+                    "monthlyIncome": 50000.0,
+                    "creditScore": 500,
+                    "existingDebt": 5000.0,
+                    "loanPurpose": "PERSONAL"
+                }
+                """, customerId);
+
+        given()
+                .contentType(ContentType.JSON)
+                .header("Authorization", authToken)
+                .body(requestBody)
+                .when()
+                .post("/loans")
+                .then()
+                .log().all()
+                .statusCode(500)
+                .body("success", equalTo(false))
+                .body("message", containsString("Loan rejected: Credit score is below minimum requirement"));
+    }
+
     @Test
     void createLoanAccount_ValidStepInterest_ReturnsCreatedLoan() {
         Long customerId = createTestCustomer();
@@ -117,7 +173,11 @@ public class LoanAccountFlowIntegrationTest {
                         "1": 8.0,
                         "3": 9.5,
                         "5": 10.5
-                    }
+                    },
+                    "monthlyIncome": 60000.0,
+                    "creditScore": 800,
+                    "existingDebt": 2000.0,
+                    "loanPurpose": "HOME"
                 }
                 """, customerId);
 
@@ -137,7 +197,7 @@ public class LoanAccountFlowIntegrationTest {
                 .body("data.customerId", notNullValue())
                 .body("data.status", equalTo("ACTIVE"));
     }
-    
+
     @Test
     void createLoanAccount_MissingInterestRateForFixed_ReturnsError() {
         Long customerId = createTestCustomer();
@@ -146,7 +206,9 @@ public class LoanAccountFlowIntegrationTest {
                     "customerId": %d,
                     "principal": 10000,
                     "tenureMonths": 12,
-                    "interestType": "FIXED"
+                    "interestType": "FIXED",
+                    "monthlyIncome": 50000.0,
+                    "creditScore": 750
                 }
                 """, customerId);
 
@@ -160,20 +222,25 @@ public class LoanAccountFlowIntegrationTest {
                 .log().all()
                 .statusCode(500)
                 .body("success", equalTo(false))
-                .body("message", containsString("Something went wrong: java.lang.IllegalArgumentException: Interest rate is required for FIXED interest type"));
+                .body("message", containsString(
+                        "Something went wrong: java.lang.IllegalArgumentException: Interest rate is required for FIXED interest type"));
     }
 
     @Test
     void createLoanAccount_InvalidCustomer_ReturnsNotFound() {
         String invalidRequestBody = """
-             {
-                "customerId": 999999,
-                "principal": 10000,
-                "tenureMonths": 12,
-                "interestType": "FIXED",
-                "interestRate": 10
-             }
-             """;
+                {
+                   "customerId": 999999,
+                   "principal": 10000,
+                   "tenureMonths": 12,
+                   "interestType": "FIXED",
+                   "interestRate": 10,
+                   "monthlyIncome": 50000.0,
+                   "creditScore": 750,
+                   "existingDebt": 5000.0,
+                   "loanPurpose": "PERSONAL"
+                }
+                """;
 
         given()
                 .contentType(ContentType.JSON)
@@ -187,7 +254,7 @@ public class LoanAccountFlowIntegrationTest {
                 .body("success", equalTo(false))
                 .body("message", containsString("Customer not found with ID: 999999"));
     }
-    
+
     @Test
     void forecloseLoan_WithUnpaidEMIs_ReturnsError() {
         Long customerId = createTestCustomer();
@@ -198,7 +265,7 @@ public class LoanAccountFlowIntegrationTest {
                     "foreclosureDate": "2025-12-31"
                 }
                 """;
-                
+
         given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", authToken)
@@ -211,7 +278,7 @@ public class LoanAccountFlowIntegrationTest {
                 .body("success", equalTo(false))
                 .body("message", containsString("Loan cannot be foreclosed — unpaid installments exist"));
     }
-    
+
     @Test
     void forecloseLoan_ValidRequest_ReturnsSuccess() {
         Long customerId = createTestCustomer();
@@ -226,7 +293,7 @@ public class LoanAccountFlowIntegrationTest {
                 .statusCode(200)
                 .extract()
                 .path("data.schedule[0].totalAmount");
-        
+
         Double emiAmount = emiAmountNumber.doubleValue();
 
         payAllEMIs(loanId, 12, emiAmount);
@@ -236,7 +303,7 @@ public class LoanAccountFlowIntegrationTest {
                     "foreclosureDate": "2025-12-31"
                 }
                 """;
-                
+
         given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", authToken)
@@ -249,7 +316,7 @@ public class LoanAccountFlowIntegrationTest {
                 .body("success", equalTo(true))
                 .body("data.status", equalTo("FORECLOSED"));
     }
-    
+
     @Test
     void getLoanById_ValidId_ReturnsLoan() {
         Long customerId = createTestCustomer();
@@ -267,7 +334,7 @@ public class LoanAccountFlowIntegrationTest {
                 .body("data.principal", equalTo(10000.00f))
                 .body("data.status", equalTo("ACTIVE"));
     }
-    
+
     @Test
     void getLoanById_InvalidId_ReturnsNotFound() {
         given()
@@ -291,7 +358,9 @@ public class LoanAccountFlowIntegrationTest {
                     "principal": 10000,
                     "tenureMonths": 12,
                     "interestType": "FIXED",
-                    "interestRate": 10
+                    "interestRate": 10,
+                    "monthlyIncome": 50000.0,
+                    "creditScore": 750
                 }
                 """, customerId);
 
@@ -345,34 +414,38 @@ public class LoanAccountFlowIntegrationTest {
 
         return customerId.longValue();
     }
-    
-    private Long createTestLoan(Long customerId, double principal, int tenureMonths, 
-                              String interestType, Double interestRate, Map<Integer, Double> steppedRates) {
+
+    private Long createTestLoan(Long customerId, double principal, int tenureMonths,
+            String interestType, Double interestRate, Map<Integer, Double> steppedRates) {
         String requestBody;
-        
+
         if (interestType.equals("STEP")) {
             requestBody = String.format("""
-                {
-                    "customerId": %d,
-                    "principal": %f,
-                    "tenureMonths": %d,
-                    "interestType": "%s",
-                    "steppedRates": %s
-                }
-                """, customerId, principal, tenureMonths, interestType, mapToJson(steppedRates));
+                    {
+                        "customerId": %d,
+                        "principal": %f,
+                        "tenureMonths": %d,
+                        "interestType": "%s",
+                        "steppedRates": %s,
+                        "monthlyIncome": 50000.0,
+                        "creditScore": 750
+                    }
+                    """, customerId, principal, tenureMonths, interestType, mapToJson(steppedRates));
         } else {
             requestBody = String.format("""
-                {
-                    "customerId": %d,
-                    "principal": %f,
-                    "tenureMonths": %d,
-                    "interestType": "%s",
-                    "interestRate": %f
-                }
-                """, customerId, principal, tenureMonths, interestType, interestRate);
+                    {
+                        "customerId": %d,
+                        "principal": %f,
+                        "tenureMonths": %d,
+                        "interestType": "%s",
+                        "interestRate": %f,
+                        "monthlyIncome": 50000.0,
+                        "creditScore": 750
+                    }
+                    """, customerId, principal, tenureMonths, interestType, interestRate);
         }
-        
-        Integer loanId =  given()
+
+        Integer loanId = given()
                 .contentType(ContentType.JSON)
                 .header("Authorization", authToken)
                 .body(requestBody)
@@ -385,7 +458,7 @@ public class LoanAccountFlowIntegrationTest {
 
         return loanId.longValue();
     }
-    
+
     private String mapToJson(Map<Integer, Double> map) {
         if (map == null || map.isEmpty()) {
             return "{}";
@@ -403,13 +476,13 @@ public class LoanAccountFlowIntegrationTest {
         for (int i = 1; i <= numberOfEMIs; i++) {
             String transactionId = "TXN-" + loanId + "-" + System.currentTimeMillis() + "-" + i;
             String paymentBody = String.format("""
-                {
-                    "paymentDate": "2023-%02d-15",
-                    "amountPaid": %.2f,
-                    "mode": "CASH",
-                    "transactionId": "%s"
-                }
-                """, i, emiAmount, transactionId);
+                    {
+                        "paymentDate": "2023-%02d-15",
+                        "amountPaid": %.2f,
+                        "mode": "CASH",
+                        "transactionId": "%s"
+                    }
+                    """, i, emiAmount, transactionId);
 
             given()
                     .contentType(ContentType.JSON)

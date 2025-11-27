@@ -29,4 +29,19 @@ public class CreateLoanRequest {
     private Integer tenureMonths;
 
     private Map<Integer, Double> steppedRates;
+
+    @NotNull(message = "Monthly income is required")
+    @Positive(message = "Monthly income must be positive")
+    private Double monthlyIncome;
+
+    @NotNull(message = "Credit score is required")
+    @Positive(message = "Credit score must be positive")
+    private Integer creditScore;
+
+    private String employmentStatus;
+
+    @Positive(message = "Existing debt must be positive")
+    private Double existingDebt;
+
+    private String loanPurpose;
 }
