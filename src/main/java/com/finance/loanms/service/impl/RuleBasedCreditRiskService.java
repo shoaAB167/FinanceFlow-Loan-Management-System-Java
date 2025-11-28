@@ -5,7 +5,11 @@ import com.finance.loanms.model.payload.RiskAssessment;
 import com.finance.loanms.service.CreditRiskService;
 import org.springframework.stereotype.Service;
 
+import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Service;
+
 @Service
+@Primary
 public class RuleBasedCreditRiskService implements CreditRiskService {
 
     private static final int MIN_CREDIT_SCORE = 600;

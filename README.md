@@ -133,13 +133,18 @@ The application will start on `http://localhost:8080`
 
 #### 1. User Registration
 
+**Validation Rules:**
+
+- **Username**: 3-20 characters, alphanumeric with underscores.
+- **Password**: Minimum 8 characters, must contain at least one letter and one number.
+
 ```http
 POST /auth/register
 Content-Type: application/json
 
 {
-  "username": "shoaib shaikh",
-  "password": "pass@123"
+  "username": "shoaib_shaikh",
+  "password": "Password123"
 }
 ```
 
@@ -149,7 +154,7 @@ Content-Type: application/json
 {
   "success": true,
   "message": "User registered successfully",
-  "data": "Registration successful"
+  "data": null
 }
 ```
 
@@ -160,8 +165,8 @@ POST /auth/login
 Content-Type: application/json
 
 {
-  "username": "shoaib shaikh",
-  "password": "pass123"
+  "username": "shoaib_shaikh",
+  "password": "Password123"
 }
 ```
 

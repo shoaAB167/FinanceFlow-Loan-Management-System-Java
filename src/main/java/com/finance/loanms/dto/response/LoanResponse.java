@@ -12,8 +12,10 @@ public record LoanResponse(
         double interestRate,
         String interestType,
         String status,
-        LocalDate startDate
-) {
+        LocalDate startDate,
+        Double riskScore,
+        String riskReason,
+        Boolean isApproved) {
     public static LoanResponse fromEntity(LoanAccount loan) {
         return new LoanResponse(
                 loan.getId(),
@@ -23,7 +25,9 @@ public record LoanResponse(
                 loan.getInterestRate().getBaseRate(),
                 loan.getInterestRate().getType().name(),
                 loan.getStatus().name(),
-                loan.getStartDate()
-        );
+                loan.getStartDate(),
+                loan.getRiskScore(),
+                loan.getRiskReason(),
+                loan.getIsApproved());
     }
 }

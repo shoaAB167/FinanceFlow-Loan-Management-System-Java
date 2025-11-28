@@ -34,4 +34,16 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.fail(ex.getMessage()));
     }
+
+    @ExceptionHandler(LoanRejectionException.class)
+    public ResponseEntity<ApiResponse<Object>> handleLoanRejection(LoanRejectionException ex) {
+        var risk = ex.getRiskAssessment();
+        var data = java.util.Map.of(
+                "isApproved", risk.isApproved(),
+                "riskScore", risk.getRiskScore(),
+                "reason", risk.getReason());
+        return ResponseEntity
+                .status(HttpStatus.OK) // Or 422 UNPROCESSABLE_ENTITY
+                .body(ApiResponse.fail("Loan rejected: " + ex.getMessage(), data));
+    }
 }

@@ -18,6 +18,7 @@ import com.finance.loanms.repository.LoanAccountRepository;
 import com.finance.loanms.service.CreditRiskService;
 import com.finance.loanms.service.LoanAccountService;
 import com.finance.loanms.service.ScheduleService;
+import com.finance.loanms.exception.LoanRejectionException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,7 +61,7 @@ public class LoanAccountServiceImpl implements LoanAccountService {
             // 2. Assess Credit Risk
             var riskAssessment = creditRiskService.assessRisk(request);
             if (!riskAssessment.isApproved()) {
-                throw new IllegalStateException("Loan rejected: " + riskAssessment.getReason());
+                throw new LoanRejectionException(riskAssessment);
             }
 
             if ((request.getInterestType() == InterestType.FIXED ||
@@ -96,6 +97,9 @@ public class LoanAccountServiceImpl implements LoanAccountService {
                     .tenureMonths(request.getTenureMonths())
                     .startDate(LocalDate.now())
                     .status(LoanStatus.ACTIVE)
+                    .riskScore(riskAssessment.getRiskScore())
+                    .riskReason(riskAssessment.getReason())
+                    .isApproved(riskAssessment.isApproved())
                     .build();
 
             loanAccount = loanAccountRepository.save(loanAccount);
@@ -107,7 +111,7 @@ public class LoanAccountServiceImpl implements LoanAccountService {
             LoanResponse response = LoanResponse.fromEntity(loanAccount);
             return ApiResponse.ok("Loan created successfully", response);
 
-        } catch (ResourceNotFoundException re) {
+        } catch (ResourceNotFoundException | LoanRejectionException re) {
             throw re;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -129,7 +133,7 @@ public class LoanAccountServiceImpl implements LoanAccountService {
             }
 
             // 3. Check if any charges exist
-            boolean hasCharges = chargeRepository.existsById(loanId);
+            boolean hasCharges = chargeRepository.existsByLoanAccountIdAndIsPaidFalse(loanId);
             if (hasCharges) {
                 throw new IllegalStateException("Loan cannot be foreclosed — outstanding charges exist");
             }

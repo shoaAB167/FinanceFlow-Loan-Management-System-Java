@@ -2,3 +2,4 @@ flask
 scikit-learn
 pandas
 numpy
+python-dotenv

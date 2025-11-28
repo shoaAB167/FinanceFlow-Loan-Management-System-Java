@@ -25,6 +25,9 @@ public class Charge extends Auditable {
     private LocalDate appliedDate;
     private String description;
 
+    @Builder.Default
+    private boolean isPaid = false;
+
     @ManyToOne(optional = false)
     private LoanAccount loanAccount;
 }

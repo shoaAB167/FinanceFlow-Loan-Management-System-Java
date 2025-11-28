@@ -2,7 +2,7 @@ import urllib.request
 import json
 
 def test_prediction(data, case_name):
-    url = 'http://localhost:5000/predict'
+    url = 'http://127.0.0.1:5000/predict'
     json_data = json.dumps(data).encode('utf-8')
     req = urllib.request.Request(url, data=json_data, headers={'Content-Type': 'application/json'})
 

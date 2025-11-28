@@ -3,6 +3,10 @@ import joblib
 import pandas as pd
 import numpy as np
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -13,6 +17,10 @@ if os.path.exists(MODEL_PATH):
 else:
     model = None
     print("Warning: Model file not found. Please run train_model.py first.")
+
+# ... (omitted) ...
+
+
 
 def map_employment_status(status):
     status = str(status).upper()
@@ -69,4 +77,5 @@ def predict():
         return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
-    app.run(port=5000, debug=True)
+    port = int(os.getenv('PORT', 5000))
+    app.run(port=port, debug=True)
