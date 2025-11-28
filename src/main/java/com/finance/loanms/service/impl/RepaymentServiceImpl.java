@@ -6,6 +6,7 @@ import com.finance.loanms.dto.response.RepaymentHistory;
 import com.finance.loanms.dto.response.RepaymentHistoryResponse;
 import com.finance.loanms.dto.response.RepaymentResponse;
 import com.finance.loanms.exception.ResourceNotFoundException;
+import com.finance.loanms.model.entity.Charge;
 import com.finance.loanms.model.entity.Installment;
 import com.finance.loanms.model.entity.LoanAccount;
 import com.finance.loanms.model.entity.Repayment;
@@ -27,13 +28,16 @@ public class RepaymentServiceImpl implements RepaymentService {
     private final LoanAccountRepository loanAccountRepository;
     private final InstallmentRepository installmentRepository;
     private final RepaymentRepository repaymentRepository;
+    private final com.finance.loanms.repository.ChargeRepository chargeRepository;
 
     public RepaymentServiceImpl(LoanAccountRepository loanAccountRepository,
-                                InstallmentRepository installmentRepository,
-                                RepaymentRepository repaymentRepository) {
+            InstallmentRepository installmentRepository,
+            RepaymentRepository repaymentRepository,
+            com.finance.loanms.repository.ChargeRepository chargeRepository) {
         this.loanAccountRepository = loanAccountRepository;
         this.installmentRepository = installmentRepository;
         this.repaymentRepository = repaymentRepository;
+        this.chargeRepository = chargeRepository;
     }
 
     @Transactional
@@ -58,11 +62,38 @@ public class RepaymentServiceImpl implements RepaymentService {
             }
 
             double amountToApply = request.amountPaid();
+
+            // 1. Pay off outstanding charges first
+            List<Charge> unpaidCharges = chargeRepository.findByLoanAccountAndIsPaidFalse(loanAccount);
+            for (Charge charge : unpaidCharges) {
+                if (amountToApply <= 0)
+                    break;
+
+                double chargeAmount = charge.getAmount();
+                if (amountToApply >= chargeAmount) {
+                    amountToApply -= chargeAmount;
+                    charge.setPaid(true);
+                    chargeRepository.save(charge);
+                } else {
+                    // Partial payment logic could go here, but for now we skip if not enough to
+                    // cover full charge
+                    // or we could deduct partial. Let's stick to full payment for simplicity or
+                    // just break.
+                    break;
+                }
+            }
+
+            if (amountToApply <= 0) {
+                return ApiResponse.ok("Repayment applied to charges successfully",
+                        new RepaymentResponse("Charges paid", null));
+            }
+
             List<Installment> installments = installmentRepository
                     .findByLoanAccountOrderByInstallmentNumberAsc(loanAccount);
 
             for (Installment installment : installments) {
-                if (installment.getStatus() == InstallmentStatus.PAID) continue;
+                if (installment.getStatus() == InstallmentStatus.PAID)
+                    continue;
 
                 double totalPaid = installment.getRepayments().stream()
                         .mapToDouble(Repayment::getAmount)
@@ -74,7 +105,8 @@ public class RepaymentServiceImpl implements RepaymentService {
                 BigDecimal pendingAmountRounded = BigDecimal.valueOf(pendingAmount).setScale(2, RoundingMode.HALF_UP);
 
                 if (amountToApplyRounded.compareTo(pendingAmountRounded) != 0) {
-                    throw new IllegalArgumentException("Amount does not match the next due EMI: ₹" + pendingAmountRounded);
+                    throw new IllegalArgumentException(
+                            "Amount (after charges) does not match the next due EMI: ₹" + pendingAmountRounded);
                 }
 
                 Repayment repayment = Repayment.builder()
@@ -123,14 +155,12 @@ public class RepaymentServiceImpl implements RepaymentService {
                             r.getPaymentDate(),
                             r.getMode(),
                             r.getTransactionId(),
-                            r.getInstallment().getInstallmentNumber()
-                    ))
+                            r.getInstallment().getInstallmentNumber()))
                     .toList();
 
             RepaymentHistoryResponse response = new RepaymentHistoryResponse(
                     "Repayment history retrieved",
-                    repaymentDtos
-            );
+                    repaymentDtos);
 
             return ApiResponse.ok("Repayment history fetched successfully", response);
 

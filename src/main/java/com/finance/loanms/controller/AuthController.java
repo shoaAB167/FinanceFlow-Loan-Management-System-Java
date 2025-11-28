@@ -1,6 +1,8 @@
 package com.finance.loanms.controller;
 
 import com.finance.loanms.dto.ApiResponse;
+import com.finance.loanms.dto.request.LoginRequest;
+import com.finance.loanms.dto.request.RegisterRequest;
 import com.finance.loanms.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -19,13 +21,13 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<String>> register(@RequestBody Map<String, String> req) {
-        return ResponseEntity.ok(userService.register(req.get("username"), req.get("password")));
+    public ResponseEntity<ApiResponse<String>> register(@Valid @RequestBody RegisterRequest req) {
+        return ResponseEntity.ok(userService.register(req));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<Map<String, String>>> login(@RequestBody Map<String, String> req) {
-        return ResponseEntity.ok(userService.login(req.get("username"), req.get("password")));
+    public ResponseEntity<ApiResponse<Map<String, String>>> login(@Valid @RequestBody LoginRequest req) {
+        return ResponseEntity.ok(userService.login(req));
     }
 
     @PostMapping("/refresh")
@@ -38,5 +40,3 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok("Logout success", null));
     }
 }
-
-
