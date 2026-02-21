@@ -18,8 +18,10 @@ else:
     model = None
     print("Warning: Model file not found. Please run train_model.py first.")
 
-# ... (omitted) ...
-
+# Health check endpoint for Kubernetes
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'healthy', 'model_loaded': model is not None}), 200
 
 
 def map_employment_status(status):
@@ -78,4 +80,4 @@ def predict():
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
-    app.run(port=port, debug=True)
+    app.run(host='0.0.0.0', port=port, debug=True)

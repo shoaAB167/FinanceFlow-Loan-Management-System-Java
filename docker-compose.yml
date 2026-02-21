@@ -1,0 +1,51 @@
+version: "3.8"
+
+services:
+  # 1. MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: loan-mysql
+    environment:
+      MYSQL_DATABASE: loan_db
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - loan-network
+
+  # 2. Python ML Service
+  ml-service:
+    build: ./ml-service
+    container_name: loan-ml-service
+    ports:
+      - "5000:5000"
+    networks:
+      - loan-network
+
+  # 3. Java Loan Application
+  loan-app:
+    build: .
+    container_name: loan-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/loan_db
+      - SPRING_DATASOURCE_USERNAME=user
+      - SPRING_DATASOURCE_PASSWORD=password
+      - ML_SERVICE_URL=http://ml-service:5000/predict
+    depends_on:
+      - mysql
+      - ml-service
+    networks:
+      - loan-network
+
+volumes:
+  mysql_data:
+
+networks:
+  loan-network:
+    driver: bridge

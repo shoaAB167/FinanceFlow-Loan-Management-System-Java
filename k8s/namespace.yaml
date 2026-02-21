@@ -1,0 +1,10 @@
+# ============================================================================
+# Kubernetes Namespace for Loan Application
+# ============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: loan-app
+  labels:
+    app: loan-app
+    environment: dev
