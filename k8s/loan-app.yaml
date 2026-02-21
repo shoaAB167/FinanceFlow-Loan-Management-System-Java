@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loan-app
+  namespace: loan-app
+  labels:
+    app: loan-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: loan-app
+  template:
+    metadata:
+      labels:
+        app: loan-app
+    spec:
+      containers:
+        - name: loan-app
+          image: 539296090216.dkr.ecr.us-east-2.amazonaws.com/loan-app:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://mysql.loan-app.svc.cluster.local:3306/loan_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "user"
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "password"
+            - name: ML_SERVICE_URL
+              value: "http://ml-service.loan-app.svc.cluster.local:5000/predict"
+
+          # Resource limits
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          # Health checks
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loan-app
+  namespace: loan-app
+  labels:
+    app: loan-app
+spec:
+  selector:
+    app: loan-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: LoadBalancer

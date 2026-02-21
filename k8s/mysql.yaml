@@ -1,0 +1,77 @@
+# ============================================================================
+# MySQL Database - Kubernetes StatefulSet
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: loan-app
+  labels:
+    app: mysql
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: mysql
+  clusterIP: None # Headless service for StatefulSet
+
+---
+# ============================================================================
+# MySQL StatefulSet with Persistent Storage
+# ============================================================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  namespace: loan-app
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  serviceName: "mysql"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: "root"
+            - name: MYSQL_DATABASE
+              value: "loan_db"
+            - name: MYSQL_USER
+              value: "user"
+            - name: MYSQL_PASSWORD
+              value: "password"
+          ports:
+            - containerPort: 3306
+              name: mysql
+
+          # Resource limits
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          # Mount persistent volume
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+
+  # Persistent Volume Claim Template
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gp2 # AWS EBS storage
+        resources:
+          requests:
+            storage: 5Gi # 5GB should be enough for learning
