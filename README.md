@@ -1,117 +1,51 @@
-# FinanceFlow - Loan Management System
+# FinanceFlow — Loan Management System
 
-## 📋 Overview
+A Spring Boot backend for managing loan accounts, customers, repayments, and schedules. Includes a Python/Flask ML microservice for credit risk assessment.
 
-This is a development project demonstrating Spring Boot capabilities for loan management systems. For production use, ensure proper security hardening, comprehensive testing, and performance optimization.
-functionalities for managing loan accounts, repayments, schedules, and customer data. The system supports various loan types with different interest calculation methods and provides a robust API for loan lifecycle management.
+## Tech Stack
 
-## 🏗️ Application Architecture  Flow
+- **Java 21** + Spring Boot 3.5.3
+- **Spring Security** + JWT (access & refresh tokens)
+- **MySQL 8** + JPA/Hibernate
+- **Redis** (caching)
+- **Resilience4j** (circuit breaker)
+- **Maven** + Lombok
+- **ML Service**: Python/Flask + Random Forest (`ml-service/`)
 
-### Core Components
-
-```
-                       ┌─────────────────┐
-                       │   ML Service    │
-                       │                 │
-                       │ • Risk Analysis │
-                       │ • Python/Flask  │
-                       └────────▲────────┘
-                                │
-┌─────────────────┐    ┌────────┴────────┐    ┌─────────────────┐
-│   Controllers   │    │    Services     │    │  Repositories   │
-│                 │    │                 │    │                 │
-│ • AuthController│───▶│ • UserService   │───▶│ • UserRepository│
-│ • LoanController│    │ • LoanService   │    │ • LoanRepository│
-│ • RepaymentCtrl │    │ • RepaymentSvc  │    │ • RepaymentRepo │
-│ • ScheduleCtrl  │    │ • ScheduleSvc   │    │ • InstallmentRep│
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Security      │    │   Data Models   │    │    Database     │
-│                 │    │                 │    │                 │
-│ • JWT Auth      │    │ • LoanAccount   │    │ • MySQL         │
-│ • Spring Sec    │    │ • Customer      │    │ • JPA/Hibernate │
-│ • Role-based    │    │ • Repayment     │    │ • Redis Cache   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### Application Flow
-
-#### 1. **User Authentication Flow**
+## Project Structure
 
 ```
-User Registration → JWT Token Generation → Login → Access Protected APIs
+├── src/                    # Main Spring Boot application
+├── ml-service/             # Python credit risk microservice
+├── doc/                    # Project documentation (guides & explanations)
+├── k8s/                    # Kubernetes manifests
+├── terraform/              # Infrastructure as code
+├── scripts/                # Utility scripts
+├── Dockerfile
+└── docker-compose.yml
 ```
 
-#### 2. **Loan Creation Flow**
+### Documentation (`doc/`)
 
-```
-Customer Data → Loan Request → Validation → Schedule Generation → Loan Account Creation
-```
+| File                            | Description                               |
+| ------------------------------- | ----------------------------------------- |
+| `Charge_and_Repayment_Logic.md` | How charges and repayments are processed  |
+| `circuit_breaker.md`            | Circuit breaker pattern with Resilience4j |
+| `DEVOPS_GUIDE.md`               | Docker, CI/CD, and deployment guide       |
+| `KUBERNETES_EXPLAINED.md`       | Kubernetes setup and concepts             |
+| `TERRAFORM_EXPLAINED.md`        | Terraform infrastructure guide            |
 
-#### 3. **Repayment Flow**
+## Getting Started
 
-```
-Payment Request → Amount Validation → Schedule Update → Payment Recording → Balance Calculation
-```
+**Prerequisites:** Java 21, Maven, MySQL 8, Redis
 
-#### 4. **Loan Closure Flow**
-
-```
-Foreclosure Request → Outstanding Calculation → Final Payment → Status Update → Account Closure
-```
-
-## 🚀 Key Features
-
-### ✅ **Implemented Features**
-
-- **User Authentication & Authorization** (JWT-based)
-- **Customer Management** (Create, Read, Update, Delete, List with pagination)
-- **Loan Account Management** (Create, Read, Foreclose)
-- **Repayment Processing** (Payment recording and tracking)
-- **Interest Calculation** (Fixed, Floating, Step-down rates)
-- **Loan Status Tracking** (Active, Closed, Foreclosed)
-- **Schedule Management** (Get schedule, Update rate changes)
-- **Charge Management** (Add, View, Remove charges)
-- **Interest Rate Changes** (Dynamic rate updates)
-- **Audit Trail** (Created/Updated timestamps for all entities)
-- **Data Validation** (Bean validation for all request payloads)
-- **Global Exception Handling**
-- **RESTful API Design**
-
-### 🧠 **ML Credit Risk Service**
-
-- **Real-time Risk Assessment**: Python-based microservice using Random Forest.
-- **Predictive Scoring**: Calculates approval probability based on income, credit score, and loan details.
-- **Seamless Integration**: Designed to work alongside the main Java application.
-
-## 🔧 Technology Stack
-
-- **Framework**: Spring Boot 3.5.3
-- **Language**: Java 21
-- **Security**: Spring Security + JWT
-- **Database**: MySQL 8.0
-- **Cache**: Redis
-- **ORM**: JPA/Hibernate
-- **Build Tool**: Maven
-- **Additional**: Lombok, Jackson, Bean Validation
-
-1. **Clone the repository**
-
-```bash
-git clone repository-url
-cd FinanceFlow-Loan-Management-System-Java
-```
-
-2. **Database Setup**
+1. Clone the repo and create the database:
 
 ```sql
 CREATE DATABASE loanms;
 ```
 
-3. **Update Configuration**
-   Edit `src/main/resources/application.properties`:
+2. Update `src/main/resources/application.properties`:
 
 ```properties
 spring.datasource.url=jdbc:mysql://localhost:3306/loanms
@@ -119,472 +53,166 @@ spring.datasource.username=your_username
 spring.datasource.password=your_password
 ```
 
-4. **Run the Application**
+3. Run:
 
 ```bash
 mvn spring-boot:run
 ```
 
-The application will start on `http://localhost:8080`
+App starts at `http://localhost:8080`.
 
-## 📚 API Documentation Testing Guide
+## API Overview
 
-### Authentication APIs
+All loan, customer, repayment, and schedule endpoints require a `Bearer` token. Auth and health endpoints are public.
 
-#### 1. User Registration
-
-**Validation Rules:**
-
-- **Username**: 3-20 characters, alphanumeric with underscores.
-- **Password**: Minimum 8 characters, must contain at least one letter and one number.
+### Authentication
 
 ```http
-POST /auth/register
-Content-Type: application/json
-
-{
-  "username": "shoaib_shaikh",
-  "password": "Password123"
-}
+POST /auth/register    # Register a new user
+POST /auth/login       # Login and receive access + refresh tokens
+POST /auth/refresh     # Refresh access token
+POST /auth/logout      # Logout
 ```
 
-**Response:**
+**Login response:**
 
 ```json
 {
   "success": true,
-  "message": "User registered successfully",
-  "data": null
-}
-```
-
-#### 2. User Login
-
-```http
-POST /auth/login
-Content-Type: application/json
-
-{
-  "username": "shoaib_shaikh",
-  "password": "Password123"
-}
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Login successful",
   "data": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "accessToken": "eyJ...",
+    "refreshToken": "eyJ...",
     "tokenType": "Bearer"
   }
 }
 ```
 
-#### 3. Refresh Token
+Token validity: **access token = 15 min**, **refresh token = 7 days**.
+
+### Customers
 
 ```http
-POST /auth/refresh
-Content-Type: application/json
-
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
+POST   /customers                          # Create customer
+GET    /customers/{id}                     # Get by internal ID
+GET    /customers/customer-id/{customerId} # Get by customer ID (e.g. CUST-20240127-00001)
+PUT    /customers/{id}                     # Update customer
+DELETE /customers/{id}                     # Delete customer
+GET    /customers?page=0&size=10           # Paginated list
 ```
 
-#### 4. Logout
-
-```http
-POST /auth/logout
-Authorization: Bearer access_token
-```
-
-### Customer Management APIs
-
-#### 1. Create Customer
-
-```http
-POST /customers
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "name": "Shoaib Shaikh",
-  "email": "shoaib.shaikh@example.com"
-}
-```
-
-**Response:**
+**Create request:**
 
 ```json
-{
-  "success": true,
-  "message": "Customer created successfully",
-  "data": {
-    "id": 1,
-    "customerId": "CUST-20240127-00001",
-    "name": "Shoaib Shaikh",
-    "email": "shoaib.shaikh@example.com",
-    "createdAt": "2024-01-15T10:30:00",
-    "updatedAt": "2024-01-15T10:30:00",
-    "loans": []
-  }
-}
+{ "name": "Shoaib Shaikh", "email": "shoaib@example.com" }
 ```
 
-#### 2. Get Customer by ID
+### Loans
 
 ```http
-GET /customers/{customerId}
-Authorization: Bearer <access_token>
+POST /loans                        # Create loan
+GET  /loans/{loanId}               # Get loan details
+POST /loans/{loanId}/foreclose     # Foreclose a loan
 ```
 
-#### 3. Get Customer by Customer ID
-
-```http
-GET /customers/customer-id/{customerIdentifier}
-Authorization: Bearer <access_token>
-```
-
-#### 4. Update Customer
-
-```http
-PUT /customers/{customerId}
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "name": "John Smith",
-  "email": "john@example.com"
-}
-```
-
-#### 5. Delete Customer
-
-```http
-DELETE /customers/{customerId}
-Authorization: Bearer <access_token>
-```
-
-#### 6. Get All Customers (with pagination)
-
-```http
-GET /customers?page=0&size=10&sort=name,asc
-Authorization: Bearer <access_token>
-```
-
-**Response:**
+**Create request (fixed rate):**
 
 ```json
-{
-  "success": true,
-  "message": "Customers retrieved successfully",
-  "data": {
-    "content": [
-      {
-        "id": 1,
-        "customerId": "CUST001",
-        "name": "John Doe",
-        "email": "john@example.com",
-        "createdAt": "2024-01-15T10:30:00",
-        "updatedAt": "2024-01-15T10:30:00",
-        "loans": [
-          {
-            "loanId": 1,
-            "loanAccountId": "LOAN-2024-001",
-            "principal": 50000.0,
-            "status": "ACTIVE",
-            "tenureMonths": 12
-          }
-        ]
-      }
-    ],
-    "totalElements": 1,
-    "totalPages": 1,
-    "size": 10,
-    "number": 0
-  }
-}
-```
-
-### Loan Management APIs
-
-#### 1. Create Loan Account
-
-```http
-POST /loans
-Authorization: Bearer access_token
-Content-Type: application/json
-
 {
   "customerId": 1,
-  "principal": 100000.00,
+  "principal": 100000.0,
   "interestRate": 12.5,
   "interestType": "FIXED",
   "tenureMonths": 24,
-  "monthlyIncome": 50000.00,
+  "monthlyIncome": 50000.0,
   "creditScore": 750,
   "employmentStatus": "SALARIED",
   "existingDebt": 0.0,
   "loanPurpose": "HOME"
 }
+```
 
+**Create request (stepped rate):**
+
+```json
 {
   "customerId": 1,
   "principal": 200000,
   "tenureMonths": 12,
   "interestType": "STEP",
   "interestRate": 0.0,
-  "steppedRates": {
-    "1": 8.0,
-    "7": 10.0
-  },
-  "monthlyIncome": 80000.00,
+  "steppedRates": { "1": 8.0, "7": 10.0 },
+  "monthlyIncome": 80000.0,
   "creditScore": 700,
   "employmentStatus": "SELF_EMPLOYED",
   "existingDebt": 15000.0,
   "loanPurpose": "BUSINESS"
 }
-
 ```
 
-**Response:**
+Supported interest types: `FIXED`, `FLOATING`, `STEP`.
+
+### Repayments
+
+```http
+POST /loans/{loanId}/repayments   # Record a payment
+GET  /loans/{loanId}/repayments   # Get payment history
+```
+
+**Request:**
 
 ```json
 {
-  "success": true,
-  "message": "Loan created successfully",
-  "data": {
-    "loanId": "LOAN-2024-001",
-    "customerId": 1,
-    "principal": 100000.0,
-    "interestRate": 12.5,
-    "interestType": "FIXED",
-    "tenureMonths": 24,
-    "status": "ACTIVE",
-    "startDate": "2024-01-15"
-  }
-}
-```
-
-#### 2. Get Loan Details
-
-```http
-GET /loans/{loanId}
-Authorization: Bearer access_token
-```
-
-#### 3. Foreclose Loan
-
-```http
-POST /loans/{loanId}/foreclose
-Authorization: Bearer access_token
-Content-Type: application/json
-
-{
-  "foreclosureDate": "2024-12-31"
-}
-```
-
-### Repayment APIs
-
-#### 1. Make Repayment
-
-```http
-POST /loans/{loanId}/repayments
-Authorization: Bearer access_token
-Content-Type: application/json
-
-{
-  "amountPaid": 5000.00,
+  "amountPaid": 5000.0,
   "paymentDate": "2024-02-15",
   "mode": "UPI",
   "transactionId": "TXN123456789"
 }
 ```
 
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Repayment processed successfully",
-  "data": {
-    "repaymentId": "RPY-2024-001",
-    "loanId": "LOAN-2024-001",
-    "amountPaid": 5000.0,
-    "paymentDate": "2024-02-15",
-    "mode": "UPI",
-    "transactionId": "TXN123456789",
-    "outstandingBalance": 95000.0
-  }
-}
-```
-
-#### 2. Get Repayment History
-
-```http
-GET /loans/{loanId}/repayments
-Authorization: Bearer access_token
-```
-
-### Schedule APIs
-
-#### 1. Get Loan Schedule
+### Schedule
 
 ```http
 GET /loans/{loanId}/schedule
-Authorization: Bearer <access_token>
+PUT /loans/{loanId}/schedule/rate-change?newInterestRate=13.5&effectiveFromInstallment=6
 ```
 
-**Response:**
+### Charges
+
+```http
+POST   /loans/{loanId}/charges             # Add a charge
+GET    /loans/{loanId}/charges             # List all charges
+DELETE /loans/{loanId}/charges/{chargeId}  # Remove a charge
+```
+
+**Request:**
 
 ```json
 {
-  "success": true,
-  "message": "Schedule retrieved successfully",
-  "data": {
-    "loanId": 1,
-    "schedule": [
-      {
-        "installmentNumber": 1,
-        "dueDate": "2024-02-15",
-        "principalComponent": 4166.67,
-        "interestComponent": 1041.67,
-        "totalAmount": 5208.34,
-        "status": "DUE"
-      }
-    ]
-  }
-}
-```
-
-#### 2. Update Schedule After Rate Change
-
-```http
-PUT /loans/{loanId}/schedule/rate-change
-Authorization: Bearer <access_token>
-
-?newInterestRate=13.5&effectiveFromInstallment=6
-```
-
-### Charge Management APIs
-
-#### 1. Add Charge to Loan
-
-```http
-POST /loans/{loanId}/charges
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
   "type": "LATE_FEE",
-  "amount": 500.00,
+  "amount": 500.0,
   "appliedDate": "2024-02-20",
   "description": "Late payment fee for installment 2"
 }
 ```
 
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Charge added successfully",
-  "data": {
-    "chargeId": 1,
-    "type": "LATE_FEE",
-    "amount": 500.0,
-    "appliedDate": "2024-02-20",
-    "description": "Late payment fee for installment 2",
-    "loanAccountId": 1
-  }
-}
-```
-
-#### 2. Get All Charges for Loan
-
-```http
-GET /loans/{loanId}/charges
-Authorization: Bearer <access_token>
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Charges retrieved successfully",
-  "data": {
-    "loanAccountId": 1,
-    "charges": [
-      {
-        "chargeId": 1,
-        "type": "LATE_FEE",
-        "amount": 500.0,
-        "appliedDate": "2024-02-20",
-        "description": "Late payment fee for installment 2"
-      }
-    ],
-    "totalCharges": 500.0
-  }
-}
-```
-
-#### 3. Remove Charge from Loan
-
-```http
-DELETE /loans/{loanId}/charges/{chargeId}
-Authorization: Bearer <access_token>
-```
-
-### Health Check API
+### Health
 
 ```http
 GET /health
 ```
 
-## 🔒 Security Configuration
+## ML Credit Risk Service
 
-The application uses JWT-based authentication with the following configuration:
+Located in `ml-service/`. A Flask API that uses a pre-trained Random Forest model (`credit_risk_model.pkl`) to predict loan approval probability based on income, credit score, loan amount, employment status, and existing debt.
 
-- **Access Token Validity**: 15 minutes
-- **Refresh Token Validity**: 7 days
-- **Protected Endpoints**: All loan, repayment, and schedule APIs
-- **Public Endpoints**: Authentication APIs and health check
+Run it separately:
 
-## 📊 Database Schema
+```bash
+cd ml-service
+pip install -r requirements.txt
+python app.py
+```
 
-### Key Entities
+## Docker / Kubernetes
 
-- **User**: System users with authentication
-- **Customer**: Loan customers
-- **LoanAccount**: Main loan entity
-- **Installment**: Payment schedule
-- **Repayment**: Payment records
-- **Charge**: Additional charges
-- **InterestRate**: Embedded interest configuration
-
-## 🚀 Future Enhancements
-
-1. **Add Swagger/OpenAPI Documentation**
-2. **Add Notification System**
-3. **Create Reporting Dashboard**
-4. **Add Rate Limiting**
-5. **Implement Audit Logging**
-6. **Add Docker Support**
-7. **Create CI/CD Pipeline**
-8. **Add Monitoring  Metrics**
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
----
+Use `docker-compose.yml` to run the app, MySQL, and Redis together. Kubernetes manifests are in `k8s/`. See `doc/DEVOPS_GUIDE.md` and `doc/KUBERNETES_EXPLAINED.md` for details.
